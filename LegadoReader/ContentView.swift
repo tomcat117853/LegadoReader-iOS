@@ -28,19 +28,26 @@ struct ContentView: View {
                 }
                 .tag(2)
             
+            ReadingProgressView()
+                .tabItem {
+                    Image(systemName: "clock.fill")
+                    Text("阅读")
+                }
+                .tag(3)
+            
             SourceManagementView()
                 .tabItem {
                     Image(systemName: "server.rack")
                     Text("书源")
                 }
-                .tag(3)
+                .tag(4)
             
             SettingsView()
                 .tabItem {
                     Image(systemName: "gear")
                     Text("设置")
                 }
-                .tag(4)
+                .tag(5)
         }
         .accentColor(.blue)
     }

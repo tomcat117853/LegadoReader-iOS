@@ -8,9 +8,7 @@ struct DiscoverView: View {
         NavigationView {
             List {
                 ForEach(sourceStore.bookSources.filter { $0.isEnabled }) { source in
-                    if source.rule.discover != nil {
-                        DiscoverSourceSection(source: source)
-                    }
+                    DiscoverSourceSection(source: source)
                 }
             }
             .listStyle(.plain)
@@ -51,7 +49,81 @@ struct DiscoverSourceSection: View {
     }
     
     private func loadDiscoverBooks() {
-        // 实现发现页面书籍加载逻辑
+        guard let discoverRule = source.rule.discover else {
+            return
+        }
+        
+        isLoading = true
+        
+        Task {
+            do {
+                let html = try await BookSourceParser.shared.fetchHTML(url: discoverRule.url, method: "GET")
+                let books = try parseDiscoverBooks(html: html, rule: discoverRule, source: source)
+                
+                await MainActor.run {
+                    self.books = books
+                    isLoading = false
+                }
+            } catch {
+                print("Failed to load discover books: \(error)")
+                await MainActor.run {
+                    isLoading = false
+                }
+            }
+        }
+    }
+    
+    private func parseDiscoverBooks(html: String, rule: DiscoverRule, source: BookSource) throws -> [Book] {
+        let document = try SwiftSoup.parse(html)
+        var books: [Book] = []
+        
+        for category in rule.categories {
+            do {
+                let categoryHTML = try await BookSourceParser.shared.fetchHTML(url: category.url, method: "GET")
+                let categoryDoc = try SwiftSoup.parse(categoryHTML)
+                
+                // 默认规则 - 需要根据实际规则解析
+                let bookElements = try categoryDoc.select(".book-item, .novel-item, li")
+                
+                for element in bookElements {
+                    do {
+                        let name = try element.select("h3, .title, a").first()?.text() ?? ""
+                        let author = try element.select(".author, .writer").first()?.text() ?? ""
+                        let cover = try element.select("img").first()?.attr("src") ?? ""
+                        let bookUrl = try element.select("a").first()?.attr("href") ?? ""
+                        
+                        if !name.isEmpty {
+                            let book = Book(
+                                name: name,
+                                author: author,
+                                cover: cover.isEmpty ? nil : cover.hasPrefix("http") ? cover : source.url + cover,
+                                sourceUrl: source.url,
+                                sourceName: source.name,
+                                bookUrl: bookUrl.hasPrefix("http") ? bookUrl : source.url + bookUrl
+                            )
+                            books.append(book)
+                        }
+                    } catch {
+                        continue
+                    }
+                }
+            } catch {
+                continue
+            }
+        }
+        
+        // 去重
+        var uniqueBooks: [Book] = []
+        var seen = Set<String>()
+        for book in books {
+            let key = "\(book.name)_\(book.author)"
+            if !seen.contains(key) {
+                seen.insert(key)
+                uniqueBooks.append(book)
+            }
+        }
+        
+        return uniqueBooks
     }
 }
 
