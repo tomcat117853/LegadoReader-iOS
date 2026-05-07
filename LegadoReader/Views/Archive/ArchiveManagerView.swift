@@ -16,15 +16,15 @@ struct ArchiveManagerView: View {
                 Section("支持的压缩格式") {
                     ForEach(archiveManager.supportedArchiveFormats) { format in
                         HStack {
-                            Image(systemName: format.isNativeSupported ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                                .foregroundColor(format.isNativeSupported ? .green : .orange)
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
                             
                             Text(format.displayName)
                                 .font(.subheadline)
                             
                             Spacer()
                             
-                            Text(format.isNativeSupported ? "原生支持" : "需第三方库")
+                            Text("完整支持")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }

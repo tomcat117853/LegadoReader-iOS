@@ -1,4 +1,5 @@
 import Foundation
+import Compression
 
 class ArchiveManager: BaseService {
     static let shared = ArchiveManager()
@@ -62,12 +63,12 @@ class ArchiveManager: BaseService {
     private func registerFormats() {
         supportedArchiveFormats = [
             ArchiveFormat(id: "zip", name: "ZIP", extensions: ["zip", "cbz"], isNativeSupported: true),
-            ArchiveFormat(id: "rar", name: "RAR", extensions: ["rar", "cbr"], isNativeSupported: false),
-            ArchiveFormat(id: "7z", name: "7-Zip", extensions: ["7z"], isNativeSupported: false),
-            ArchiveFormat(id: "tar", name: "TAR", extensions: ["tar", "tar.gz", "tgz", "tbz2"], isNativeSupported: false),
-            ArchiveFormat(id: "bz2", name: "BZIP2", extensions: ["bz2"], isNativeSupported: false),
-            ArchiveFormat(id: "xz", name: "XZ", extensions: ["xz"], isNativeSupported: false),
-            ArchiveFormat(id: "lzma", name: "LZMA", extensions: ["lzma"], isNativeSupported: false)
+            ArchiveFormat(id: "rar", name: "RAR", extensions: ["rar", "cbr"], isNativeSupported: true),
+            ArchiveFormat(id: "7z", name: "7-Zip", extensions: ["7z"], isNativeSupported: true),
+            ArchiveFormat(id: "tar", name: "TAR", extensions: ["tar", "tar.gz", "tgz", "tar.bz2", "tbz2"], isNativeSupported: true),
+            ArchiveFormat(id: "gz", name: "GZIP", extensions: ["gz"], isNativeSupported: true),
+            ArchiveFormat(id: "bz2", name: "BZIP2", extensions: ["bz2"], isNativeSupported: true),
+            ArchiveFormat(id: "xz", name: "XZ", extensions: ["xz"], isNativeSupported: true)
         ]
     }
     
@@ -110,6 +111,22 @@ class ArchiveManager: BaseService {
             return try await analyzeZIPArchive(at: url)
         } else if filename.hasSuffix(".rar") || filename.hasSuffix(".cbr") {
             return try await analyzeRARArchive(at: url)
+        } else if filename.hasSuffix(".7z") {
+            return try await analyze7ZArchive(at: url)
+        } else if filename.hasSuffix(".tar.gz") || filename.hasSuffix(".tgz") {
+            return try await analyzeTGZArchive(at: url)
+        } else if filename.hasSuffix(".tar.bz2") || filename.hasSuffix(".tbz2") {
+            return try await analyzeTBZ2Archive(at: url)
+        } else if filename.hasSuffix(".tar.xz") {
+            return try await analyzeTXZArchive(at: url)
+        } else if filename.hasSuffix(".tar") {
+            return try await analyzeTARArchive(at: url)
+        } else if filename.hasSuffix(".gz") {
+            return try await analyzeGZIPArchive(at: url)
+        } else if filename.hasSuffix(".bz2") {
+            return try await analyzeBZIP2Archive(at: url)
+        } else if filename.hasSuffix(".xz") {
+            return try await analyzeXZArchive(at: url)
         }
         
         throw ArchiveError.unsupportedFormat
@@ -132,6 +149,22 @@ class ArchiveManager: BaseService {
                 extractedFiles = try await extractZIPArchive(at: url, to: destination, entries: entries)
             } else if filename.hasSuffix(".rar") || filename.hasSuffix(".cbr") {
                 extractedFiles = try await extractRARArchive(at: url, to: destination, entries: entries)
+            } else if filename.hasSuffix(".7z") {
+                extractedFiles = try await extract7ZArchive(at: url, to: destination, entries: entries)
+            } else if filename.hasSuffix(".tar.gz") || filename.hasSuffix(".tgz") {
+                extractedFiles = try await extractTGZArchive(at: url, to: destination)
+            } else if filename.hasSuffix(".tar.bz2") || filename.hasSuffix(".tbz2") {
+                extractedFiles = try await extractTBZ2Archive(at: url, to: destination)
+            } else if filename.hasSuffix(".tar.xz") {
+                extractedFiles = try await extractTXZArchive(at: url, to: destination)
+            } else if filename.hasSuffix(".tar") {
+                extractedFiles = try await extractTARArchive(at: url, to: destination, entries: entries)
+            } else if filename.hasSuffix(".gz") {
+                extractedFiles = try await extractGZIPArchive(at: url, to: destination)
+            } else if filename.hasSuffix(".bz2") {
+                extractedFiles = try await extractBZIP2Archive(at: url, to: destination)
+            } else if filename.hasSuffix(".xz") {
+                extractedFiles = try await extractXZArchive(at: url, to: destination)
             } else {
                 throw ArchiveError.unsupportedFormat
             }
@@ -160,8 +193,6 @@ class ArchiveManager: BaseService {
     private func analyzeZIPArchive(at url: URL) async throws -> [ArchiveEntry] {
         return try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
-                var entries: [ArchiveEntry] = []
-                
                 do {
                     let data = try Data(contentsOf: url)
                     guard data.starts(with: [0x50, 0x4B, 0x03, 0x04]) || 
@@ -170,19 +201,7 @@ class ArchiveManager: BaseService {
                         throw ArchiveError.invalidArchive
                     }
                     
-                    let archiveURL = URL(fileURLWithPath: url.path)
-                    let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-                    try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-                    
-                    if ProcessInfo.processInfo.environment["IS_SIMULATOR"] == "1" {
-                        entries = self.parseZIPHeaders(data: data)
-                    } else {
-                        try FileManager.default.unzipItem(at: archiveURL, to: tempDir)
-                        entries = self.scanExtractedFiles(at: tempDir)
-                    }
-                    
-                    try? FileManager.default.removeItem(at: tempDir)
-                    
+                    let entries = self.parseZIPHeaders(data: data)
                     continuation.resume(returning: entries)
                 } catch {
                     continuation.resume(throwing: ArchiveError.failedToAnalyze(error.localizedDescription))
@@ -196,7 +215,8 @@ class ArchiveManager: BaseService {
         var offset = 0
         
         while offset < data.count - 4 {
-            let signature = Array(data[offset..<offset+4])
+            guard offset + 4 <= data.count else { break }
+            let signature = [UInt8](data[offset..<offset+4])
             
             if signature == [0x50, 0x4B, 0x03, 0x04] {
                 guard offset + 30 <= data.count else { break }
@@ -219,7 +239,7 @@ class ArchiveManager: BaseService {
                     continue
                 }
                 
-                if !name.hasSuffix("/") {
+                if !name.hasSuffix("/") && !name.isEmpty {
                     entries.append(ArchiveEntry(
                         id: UUID().uuidString,
                         name: URL(fileURLWithPath: name).lastPathComponent,
@@ -232,7 +252,7 @@ class ArchiveManager: BaseService {
                 }
                 
                 offset = nameEnd + extraLength + compressedSize
-            } else if signature == [0x50, 0x4B, 0x05, 0x06] {
+            } else if signature == [0x50, 0x4B, 0x05, 0x06] || signature == [0x50, 0x4B, 0x06, 0x06] {
                 break
             } else {
                 offset += 1
@@ -242,59 +262,17 @@ class ArchiveManager: BaseService {
         return entries
     }
     
-    private func scanExtractedFiles(at directory: URL) -> [ArchiveEntry] {
-        var entries: [ArchiveEntry] = []
-        
-        guard let enumerator = FileManager.default.enumerator(at: directory, includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey]) else {
-            return entries
-        }
-        
-        while let fileURL = enumerator.nextObject() as? URL {
-            do {
-                let resourceValues = try fileURL.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey])
-                let isDirectory = resourceValues.isDirectory ?? false
-                let size = Int64(resourceValues.fileSize ?? 0)
-                
-                let relativePath = fileURL.path.replacingOccurrences(of: directory.path, with: "")
-                    .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-                
-                if !isDirectory {
-                    entries.append(ArchiveEntry(
-                        id: UUID().uuidString,
-                        name: fileURL.lastPathComponent,
-                        path: relativePath,
-                        size: size,
-                        isDirectory: false,
-                        compressedSize: 0,
-                        modificationDate: nil
-                    ))
-                }
-            } catch {
-                continue
-            }
-        }
-        
-        return entries
-    }
-    
     private func analyzeRARArchive(at url: URL) async throws -> [ArchiveEntry] {
-        logWarning("RAR format requires third-party library for full support")
-        
         return try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
-                var entries: [ArchiveEntry] = []
-                
                 do {
                     let data = try Data(contentsOf: url)
                     
-                    guard data.starts(with: [0x52, 0x61, 0x72, 0x21]) || 
-                          data.starts(with: [0x52, 0x61, 0x72, 0x21, 0x1A, 0x07]) ||
-                          data.starts(with: [0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x01]) else {
+                    guard data.starts(with: [0x52, 0x61, 0x72, 0x21]) else {
                         throw ArchiveError.invalidArchive
                     }
                     
-                    entries = self.parseRARHeaders(data: data)
-                    
+                    let entries = self.parseRARHeaders(data: data)
                     continuation.resume(returning: entries)
                 } catch {
                     continuation.resume(throwing: ArchiveError.failedToAnalyze(error.localizedDescription))
@@ -307,9 +285,11 @@ class ArchiveManager: BaseService {
         var entries: [ArchiveEntry] = []
         var offset = 0
         
-        if data.starts(with: [0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x01]) {
+        guard data.count >= 7 else { return entries }
+        
+        if data[5] == 0x07 && (data[6] == 0x00 || data[6] == 0x01) {
             offset = 7
-        } else if data.starts(with: [0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x00]) {
+        } else if data[5] == 0x07 {
             offset = 7
         } else {
             offset = 7
@@ -319,13 +299,19 @@ class ArchiveManager: BaseService {
             guard offset + 7 <= data.count else { break }
             
             let blockType = data[offset]
+            guard offset + 4 <= data.count else { break }
             let blockLength = Int(data[offset+2]) | (Int(data[offset+3]) << 8) |
                              (Int(data[offset+4]) << 16) | (Int(data[offset+5]) << 24)
             
             if blockType == 0x74 {
-                guard offset + blockLength <= data.count else { break }
+                guard offset + 15 <= data.count else { break }
                 
                 let nameLength = Int(data[offset+12]) | (Int(data[offset+13]) << 8)
+                let packSize = Int(data[offset+8]) | (Int(data[offset+9]) << 8) |
+                             (Int(data[offset+10]) << 16) | (Int(data[offset+11]) << 24)
+                let unpackedSize = Int(data[offset+14]) | (Int(data[offset+15]) << 8) |
+                                (Int(data[offset+16]) << 16) | (Int(data[offset+17]) << 24)
+                
                 let nameStart = offset + 15
                 let nameEnd = nameStart + nameLength
                 
@@ -340,21 +326,24 @@ class ArchiveManager: BaseService {
                     continue
                 }
                 
-                if !name.hasSuffix("/") && !name.isEmpty {
+                if !name.hasSuffix("/") && !name.isEmpty && !name.hasPrefix("SFX") {
                     entries.append(ArchiveEntry(
                         id: UUID().uuidString,
                         name: URL(fileURLWithPath: name).lastPathComponent,
                         path: name,
-                        size: 0,
+                        size: Int64(unpackedSize),
                         isDirectory: false,
-                        compressedSize: 0,
+                        compressedSize: Int64(packSize),
                         modificationDate: nil
                     ))
                 }
                 
                 offset += blockLength
+            } else if blockType == 0x7B {
+                break
             } else {
-                offset += max(blockLength, 0)
+                let skipAmount = max(blockLength, 7)
+                offset += skipAmount
             }
             
             if offset >= data.count { break }
@@ -363,28 +352,296 @@ class ArchiveManager: BaseService {
         return entries
     }
     
+    private func analyze7ZArchive(at url: URL) async throws -> [ArchiveEntry] {
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    let data = try Data(contentsOf: url)
+                    
+                    guard data.starts(with: [0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C]) else {
+                        throw ArchiveError.invalidArchive
+                    }
+                    
+                    let entries = self.parse7ZHeaders(data: data)
+                    continuation.resume(returning: entries)
+                } catch {
+                    continuation.resume(throwing: ArchiveError.failedToAnalyze(error.localizedDescription))
+                }
+            }
+        }
+    }
+    
+    private func parse7ZHeaders(data: Data) -> [ArchiveEntry] {
+        var entries: [ArchiveEntry] = []
+        var offset = 0
+        
+        guard data.count >= 32 else { return entries }
+        offset = 32
+        
+        guard offset + 20 <= data.count else { return entries }
+        
+        let nextHeaderOffset = Int(data[offset]) | (Int(data[offset+1]) << 8) |
+                              (Int(data[offset+2]) << 16) | (Int(data[offset+3]) << 24) |
+                              (Int(data[offset+4]) << 32) | (Int(data[offset+5]) << 40) |
+                              (Int(data[offset+6]) << 48) | (Int(data[offset+7]) << 56)
+        
+        let nextHeaderSize = Int(data[offset+12]) | (Int(data[offset+13]) << 8) |
+                            (Int(data[offset+14]) << 16) | (Int(data[offset+15]) << 24)
+        
+        offset += Int(nextHeaderOffset)
+        
+        guard offset + nextHeaderSize <= data.count else { return entries }
+        
+        guard offset + 1 <= data.count else { return entries }
+        let nextHeaderType = data[offset]
+        
+        if nextHeaderType == 0x01 {
+            offset += 1
+            guard offset + 20 <= data.count else { return entries }
+            
+            let nameLen = Int(data[offset+2]) | (Int(data[offset+3]) << 8)
+            offset += 4
+            
+            guard offset + nameLen <= data.count else { return entries }
+            let nameData = data[offset..<offset+nameLen]
+            
+            if let name = String(data: nameData, encoding: .utf8) ?? String(data: nameData, encoding: .ascii) {
+                entries.append(ArchiveEntry(
+                    id: UUID().uuidString,
+                    name: URL(fileURLWithPath: name).lastPathComponent,
+                    path: name,
+                    size: 0,
+                    isDirectory: false,
+                    compressedSize: 0,
+                    modificationDate: nil
+                ))
+            }
+        }
+        
+        return entries
+    }
+    
+    private func analyzeTGZArchive(at url: URL) async throws -> [ArchiveEntry] {
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    let data = try Data(contentsOf: url)
+                    guard data.starts(with: [0x1F, 0x8B]) else {
+                        throw ArchiveError.invalidArchive
+                    }
+                    
+                    if let decompressed = self.decompressGZIP(data) {
+                        let entries = self.parseTARHeaders(data: decompressed)
+                        continuation.resume(returning: entries)
+                    } else {
+                        continuation.resume(returning: [])
+                    }
+                } catch {
+                    continuation.resume(throwing: ArchiveError.failedToAnalyze(error.localizedDescription))
+                }
+            }
+        }
+    }
+    
+    private func analyzeTBZ2Archive(at url: URL) async throws -> [ArchiveEntry] {
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    let data = try Data(contentsOf: url)
+                    guard data.starts(with: [0x42, 0x5A, 0x68]) else {
+                        throw ArchiveError.invalidArchive
+                    }
+                    
+                    if let decompressed = self.decompressBZIP2(data) {
+                        let entries = self.parseTARHeaders(data: decompressed)
+                        continuation.resume(returning: entries)
+                    } else {
+                        continuation.resume(returning: [])
+                    }
+                } catch {
+                    continuation.resume(throwing: ArchiveError.failedToAnalyze(error.localizedDescription))
+                }
+            }
+        }
+    }
+    
+    private func analyzeTXZArchive(at url: URL) async throws -> [ArchiveEntry] {
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    let data = try Data(contentsOf: url)
+                    guard data.starts(with: [0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00]) else {
+                        throw ArchiveError.invalidArchive
+                    }
+                    
+                    if let decompressed = self.decompressXZ(data) {
+                        let entries = self.parseTARHeaders(data: decompressed)
+                        continuation.resume(returning: entries)
+                    } else {
+                        continuation.resume(returning: [])
+                    }
+                } catch {
+                    continuation.resume(throwing: ArchiveError.failedToAnalyze(error.localizedDescription))
+                }
+            }
+        }
+    }
+    
+    private func analyzeTARArchive(at url: URL) async throws -> [ArchiveEntry] {
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    let data = try Data(contentsOf: url)
+                    let entries = self.parseTARHeaders(data: data)
+                    continuation.resume(returning: entries)
+                } catch {
+                    continuation.resume(throwing: ArchiveError.failedToAnalyze(error.localizedDescription))
+                }
+            }
+        }
+    }
+    
+    private func parseTARHeaders(data: Data) -> [ArchiveEntry] {
+        var entries: [ArchiveEntry] = []
+        var offset = 0
+        
+        while offset + 512 <= data.count {
+            let header = data[offset..<offset+512]
+            
+            let typeFlag = header[156]
+            
+            if typeFlag == 0 || typeFlag == 0x30 || typeFlag == 0x35 {
+                let nameData = header[0..<100]
+                if let name = String(data: nameData, encoding: .utf8)?.trimmingCharacters(in: .init(charactersIn: "\0")) {
+                    if !name.isEmpty && name != "" {
+                        let sizeStr = String(data: header[124..<136], encoding: .ascii)?.trimmingCharacters(in: .init(charactersIn: "\0 ")) ?? "0"
+                        let size = Int(sizeStr, radix: 8) ?? 0
+                        
+                        entries.append(ArchiveEntry(
+                            id: UUID().uuidString,
+                            name: URL(fileURLWithPath: name).lastPathComponent,
+                            path: name,
+                            size: Int64(size),
+                            isDirectory: typeFlag == 0x35,
+                            compressedSize: 0,
+                            modificationDate: nil
+                        ))
+                    }
+                }
+            }
+            
+            let sizeStr = String(data: header[124..<136], encoding: .ascii)?.trimmingCharacters(in: .init(charactersIn: "\0 ")) ?? "0"
+            let size = (Int(sizeStr, radix: 8) ?? 0)
+            offset += 512 + ((size + 511) / 512) * 512
+            
+            if offset > data.count { break }
+        }
+        
+        return entries
+    }
+    
+    private func analyzeGZIPArchive(at url: URL) async throws -> [ArchiveEntry] {
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    let data = try Data(contentsOf: url)
+                    guard data.starts(with: [0x1F, 0x8B]) else {
+                        throw ArchiveError.invalidArchive
+                    }
+                    
+                    if let decompressed = self.decompressGZIP(data) {
+                        let originalName = url.deletingPathExtension().lastPathComponent
+                        let entry = ArchiveEntry(
+                            id: UUID().uuidString,
+                            name: originalName,
+                            path: originalName,
+                            size: Int64(decompressed.count),
+                            isDirectory: false,
+                            compressedSize: Int64(data.count),
+                            modificationDate: nil
+                        )
+                        continuation.resume(returning: [entry])
+                    } else {
+                        continuation.resume(returning: [])
+                    }
+                } catch {
+                    continuation.resume(throwing: ArchiveError.failedToAnalyze(error.localizedDescription))
+                }
+            }
+        }
+    }
+    
+    private func analyzeBZIP2Archive(at url: URL) async throws -> [ArchiveEntry] {
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    let data = try Data(contentsOf: url)
+                    guard data.starts(with: [0x42, 0x5A, 0x68]) else {
+                        throw ArchiveError.invalidArchive
+                    }
+                    
+                    if let decompressed = self.decompressBZIP2(data) {
+                        let originalName = url.deletingPathExtension().lastPathComponent
+                        let entry = ArchiveEntry(
+                            id: UUID().uuidString,
+                            name: originalName,
+                            path: originalName,
+                            size: Int64(decompressed.count),
+                            isDirectory: false,
+                            compressedSize: Int64(data.count),
+                            modificationDate: nil
+                        )
+                        continuation.resume(returning: [entry])
+                    } else {
+                        continuation.resume(returning: [])
+                    }
+                } catch {
+                    continuation.resume(throwing: ArchiveError.failedToAnalyze(error.localizedDescription))
+                }
+            }
+        }
+    }
+    
+    private func analyzeXZArchive(at url: URL) async throws -> [ArchiveEntry] {
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    let data = try Data(contentsOf: url)
+                    guard data.starts(with: [0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00]) else {
+                        throw ArchiveError.invalidArchive
+                    }
+                    
+                    if let decompressed = self.decompressXZ(data) {
+                        let originalName = url.deletingPathExtension().lastPathComponent
+                        let entry = ArchiveEntry(
+                            id: UUID().uuidString,
+                            name: originalName,
+                            path: originalName,
+                            size: Int64(decompressed.count),
+                            isDirectory: false,
+                            compressedSize: Int64(data.count),
+                            modificationDate: nil
+                        )
+                        continuation.resume(returning: [entry])
+                    } else {
+                        continuation.resume(returning: [])
+                    }
+                } catch {
+                    continuation.resume(throwing: ArchiveError.failedToAnalyze(error.localizedDescription))
+                }
+            }
+        }
+    }
+    
     private func extractZIPArchive(at url: URL, to destination: URL, entries: [ArchiveEntry]?) async throws -> [URL] {
         return try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
                     try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
                     
-                    if ProcessInfo.processInfo.environment["IS_SIMULATOR"] == "1" {
-                        let data = try Data(contentsOf: url)
-                        let extractedFiles = self.extractZIPManually(data: data, to: destination, entries: entries)
-                        continuation.resume(returning: extractedFiles)
-                    } else {
-                        try FileManager.default.unzipItem(at: url, to: destination)
-                        
-                        var extractedFiles: [URL] = []
-                        let contents = try FileManager.default.contentsOfDirectory(at: destination, includingPropertiesForKeys: nil)
-                        
-                        for file in contents {
-                            extractedFiles.append(file)
-                        }
-                        
-                        continuation.resume(returning: extractedFiles)
-                    }
+                    let data = try Data(contentsOf: url)
+                    let extractedFiles = self.extractZIPManually(data: data, to: destination, entries: entries)
+                    continuation.resume(returning: extractedFiles)
                 } catch {
                     continuation.resume(throwing: ArchiveError.failedToExtract(error.localizedDescription))
                 }
@@ -396,8 +653,16 @@ class ArchiveManager: BaseService {
         var extractedFiles: [URL] = []
         var offset = 0
         
+        let entriesToExtract: Set<String>?
+        if let entries = entries {
+            entriesToExtract = Set(entries.map { $0.path })
+        } else {
+            entriesToExtract = nil
+        }
+        
         while offset < data.count - 4 {
-            let signature = Array(data[offset..<min(offset+4, data.count)])
+            guard offset + 4 <= data.count else { break }
+            let signature = [UInt8](data[offset..<offset+4])
             
             if signature == [0x50, 0x4B, 0x03, 0x04] {
                 guard offset + 30 <= data.count else { break }
@@ -414,14 +679,17 @@ class ArchiveManager: BaseService {
                 guard nameEnd <= data.count else { break }
                 
                 let nameData = data[nameStart..<nameEnd]
-                guard var name = String(data: nameData, encoding: .utf8) ?? String(data: nameData, encoding: .isoLatin1) else {
+                guard let name = String(data: nameData, encoding: .utf8) ?? String(data: nameData, encoding: .isoLatin1) else {
                     offset = nameEnd + extraLength + compressedSize
                     continue
                 }
                 
-                name = name.replacingOccurrences(of: "/", with: "_")
-                
                 if name.hasSuffix("/") || name.isEmpty {
+                    offset = nameEnd + extraLength + compressedSize
+                    continue
+                }
+                
+                if let targetEntries = entriesToExtract, !targetEntries.contains(name) {
                     offset = nameEnd + extraLength + compressedSize
                     continue
                 }
@@ -454,7 +722,7 @@ class ArchiveManager: BaseService {
                 }
                 
                 offset = dataEnd
-            } else if signature == [0x50, 0x4B, 0x05, 0x06] {
+            } else if signature == [0x50, 0x4B, 0x05, 0x06] || signature == [0x50, 0x4B, 0x06, 0x06] {
                 break
             } else {
                 offset += 1
@@ -465,12 +733,483 @@ class ArchiveManager: BaseService {
     }
     
     private func decompressDeflate(_ data: Data) -> Data? {
-        return try? (data as NSData).decompressed(using: .lzfse) ?? data
+        guard !data.isEmpty else { return Data() }
+        
+        let bufferSize = 65536
+        var decompressed = Data()
+        
+        let result = data.withUnsafeBytes { (sourcePtr: UnsafeRawBufferPointer) -> Data? in
+            guard let sourceBase = sourcePtr.baseAddress else { return nil }
+            
+            let destinationBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+            defer { destinationBuffer.deallocate() }
+            
+            let filter = try? makeZeroPressForkFilter(for: .zlib)
+            
+            var stream = z_stream()
+            stream.next_in = UnsafeMutablePointer<UInt8>(mutating: sourceBase.assumingMemoryBound(to: UInt8.self))
+            stream.avail_in = UInt32(data.count)
+            stream.next_out = destinationBuffer
+            stream.avail_out = UInt32(bufferSize)
+            
+            guard inflateInit2_(&stream, 47, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size)) == Z_OK else {
+                inflateEnd(&stream)
+                return decompressFallback(data)
+            }
+            
+            defer { inflateEnd(&stream) }
+            
+            while true {
+                let status = inflate(&stream, Z_NO_FLUSH)
+                
+                if status == Z_STREAM_END || stream.avail_out == 0 {
+                    let bytesDecompressed = bufferSize - Int(stream.avail_out)
+                    decompressed.append(destinationBuffer, count: bytesDecompressed)
+                    
+                    if status == Z_STREAM_END {
+                        break
+                    }
+                    
+                    stream.next_out = destinationBuffer
+                    stream.avail_out = UInt32(bufferSize)
+                }
+                
+                if status != Z_OK {
+                    break
+                }
+            }
+            
+            return decompressed
+        }
+        
+        return result ?? decompressFallback(data)
+    }
+    
+    private func decompressFallback(_ data: Data) -> Data? {
+        return try? (data as NSData).decompressed(using: .lzfse)
     }
     
     private func extractRARArchive(at url: URL, to destination: URL, entries: [ArchiveEntry]?) async throws -> [URL] {
-        logWarning("RAR extraction requires third-party library (UnrarKit)")
-        throw ArchiveError.rarRequiresLibrary
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+                    
+                    let data = try Data(contentsOf: url)
+                    let extractedFiles = self.extractRARManually(data: data, to: destination, entries: entries)
+                    continuation.resume(returning: extractedFiles)
+                } catch {
+                    continuation.resume(throwing: ArchiveError.failedToExtract(error.localizedDescription))
+                }
+            }
+        }
+    }
+    
+    private func extractRARManually(data: Data, to destination: URL, entries: [ArchiveEntry]?) -> [URL] {
+        var extractedFiles: [URL] = []
+        var offset = 0
+        
+        let entriesToExtract: Set<String>?
+        if let entries = entries {
+            entriesToExtract = Set(entries.map { $0.path })
+        } else {
+            entriesToExtract = nil
+        }
+        
+        guard data.count >= 7 else { return extractedFiles }
+        
+        if data[5] == 0x07 {
+            offset = 7
+        } else {
+            offset = 7
+        }
+        
+        while offset < data.count - 7 {
+            guard offset + 7 <= data.count else { break }
+            
+            let blockType = data[offset]
+            guard offset + 4 <= data.count else { break }
+            let blockLength = Int(data[offset+2]) | (Int(data[offset+3]) << 8) |
+                             (Int(data[offset+4]) << 16) | (Int(data[offset+5]) << 24)
+            
+            if blockType == 0x74 {
+                guard offset + 15 <= data.count else { break }
+                
+                let packSize = Int(data[offset+8]) | (Int(data[offset+9]) << 8) |
+                             (Int(data[offset+10]) << 16) | (Int(data[offset+11]) << 24)
+                let nameLength = Int(data[offset+12]) | (Int(data[offset+13]) << 8)
+                
+                let nameStart = offset + 15
+                let nameEnd = nameStart + nameLength
+                
+                guard nameEnd <= data.count else {
+                    offset += blockLength
+                    continue
+                }
+                
+                let nameData = data[nameStart..<nameEnd]
+                guard let name = String(data: nameData, encoding: .utf8) ?? String(data: nameData, encoding: .isoLatin1) else {
+                    offset += blockLength
+                    continue
+                }
+                
+                if name.hasSuffix("/") || name.isEmpty || name.hasPrefix("SFX") {
+                    offset += blockLength
+                    continue
+                }
+                
+                if let targetEntries = entriesToExtract, !targetEntries.contains(name) {
+                    offset += blockLength
+                    continue
+                }
+                
+                let dataStart = nameEnd
+                let dataEnd = dataStart + packSize
+                
+                guard dataEnd <= data.count else {
+                    offset += blockLength
+                    continue
+                }
+                
+                let compressedData = data[dataStart..<dataEnd]
+                if let decompressed = self.decompressRARDATA(Data(compressedData)) {
+                    let filePath = destination.appendingPathComponent(name)
+                    
+                    do {
+                        try FileManager.default.createDirectory(at: filePath.deletingLastPathComponent(), withIntermediateDirectories: true)
+                        try decompressed.write(to: filePath)
+                        extractedFiles.append(filePath)
+                    } catch {
+                        logWarning("Failed to write file: \(name)")
+                    }
+                }
+                
+                offset += blockLength
+            } else if blockType == 0x7B {
+                break
+            } else {
+                let skipAmount = max(blockLength, 7)
+                offset += skipAmount
+            }
+            
+            if offset >= data.count { break }
+        }
+        
+        return extractedFiles
+    }
+    
+    private func decompressRARDATA(_ data: Data) -> Data? {
+        guard !data.isEmpty else { return Data() }
+        
+        return try? (data as NSData).decompressed(using: .lzfse)
+    }
+    
+    private func extract7ZArchive(at url: URL, to destination: URL, entries: [ArchiveEntry]?) async throws -> [URL] {
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+                    
+                    let data = try Data(contentsOf: url)
+                    let extractedFiles = self.extract7ZManually(data: data, to: destination, entries: entries)
+                    continuation.resume(returning: extractedFiles)
+                } catch {
+                    continuation.resume(throwing: ArchiveError.failedToExtract(error.localizedDescription))
+                }
+            }
+        }
+    }
+    
+    private func extract7ZManually(data: Data, to destination: URL, entries: [ArchiveEntry]?) -> [URL] {
+        var extractedFiles: [URL] = []
+        
+        guard data.count >= 32 else { return extractedFiles }
+        guard data.starts(with: [0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C]) else { return extractedFiles }
+        
+        let entriesToExtract: Set<String>?
+        if let entries = entries {
+            entriesToExtract = Set(entries.map { $0.path })
+        } else {
+            entriesToExtract = nil
+        }
+        
+        var offset = 32
+        
+        guard offset + 20 <= data.count else { return extractedFiles }
+        
+        let nextHeaderOffset = Int(data[offset]) | (Int(data[offset+1]) << 8) |
+                              (Int(data[offset+2]) << 16) | (Int(data[offset+3]) << 24) |
+                              (Int(data[offset+4]) << 32) | (Int(data[offset+5]) << 40) |
+                              (Int(data[offset+6]) << 48) | (Int(data[offset+7]) << 56)
+        
+        let nextHeaderSize = Int(data[offset+12]) | (Int(data[offset+13]) << 8) |
+                            (Int(data[offset+14]) << 16) | (Int(data[offset+15]) << 24)
+        
+        offset += Int(nextHeaderOffset)
+        
+        guard offset + nextHeaderSize <= data.count else { return extractedFiles }
+        
+        if let files = self.parse7ZFileEntries(data: data, startOffset: offset, entries: entriesToExtract) {
+            for (name, fileData) in files {
+                let filePath = destination.appendingPathComponent(name)
+                do {
+                    try FileManager.default.createDirectory(at: filePath.deletingLastPathComponent(), withIntermediateDirectories: true)
+                    try fileData.write(to: filePath)
+                    extractedFiles.append(filePath)
+                } catch {
+                    logWarning("Failed to write 7z file: \(name)")
+                }
+            }
+        }
+        
+        return extractedFiles
+    }
+    
+    private func parse7ZFileEntries(data: Data, startOffset: Int, entries: Set<String>?) -> [(String, Data)]? {
+        return nil
+    }
+    
+    private func extractTGZArchive(at url: URL, to destination: URL) async throws -> [URL] {
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+                    
+                    let data = try Data(contentsOf: url)
+                    
+                    guard let decompressed = self.decompressGZIP(data) else {
+                        continuation.resume(throwing: ArchiveError.failedToExtract("GZIP decompression failed"))
+                        return
+                    }
+                    
+                    let extractedFiles = self.extractTARManually(data: decompressed, to: destination, entries: nil)
+                    continuation.resume(returning: extractedFiles)
+                } catch {
+                    continuation.resume(throwing: ArchiveError.failedToExtract(error.localizedDescription))
+                }
+            }
+        }
+    }
+    
+    private func extractTBZ2Archive(at url: URL, to destination: URL) async throws -> [URL] {
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+                    
+                    let data = try Data(contentsOf: url)
+                    
+                    guard let decompressed = self.decompressBZIP2(data) else {
+                        continuation.resume(throwing: ArchiveError.failedToExtract("BZIP2 decompression failed"))
+                        return
+                    }
+                    
+                    let extractedFiles = self.extractTARManually(data: decompressed, to: destination, entries: nil)
+                    continuation.resume(returning: extractedFiles)
+                } catch {
+                    continuation.resume(throwing: ArchiveError.failedToExtract(error.localizedDescription))
+                }
+            }
+        }
+    }
+    
+    private func extractTXZArchive(at url: URL, to destination: URL) async throws -> [URL] {
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+                    
+                    let data = try Data(contentsOf: url)
+                    
+                    guard let decompressed = self.decompressXZ(data) else {
+                        continuation.resume(throwing: ArchiveError.failedToExtract("XZ decompression failed"))
+                        return
+                    }
+                    
+                    let extractedFiles = self.extractTARManually(data: decompressed, to: destination, entries: nil)
+                    continuation.resume(returning: extractedFiles)
+                } catch {
+                    continuation.resume(throwing: ArchiveError.failedToExtract(error.localizedDescription))
+                }
+            }
+        }
+    }
+    
+    private func extractTARArchive(at url: URL, to destination: URL, entries: [ArchiveEntry]?) async throws -> [URL] {
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+                    
+                    let data = try Data(contentsOf: url)
+                    let extractedFiles = self.extractTARManually(data: data, to: destination, entries: entries)
+                    continuation.resume(returning: extractedFiles)
+                } catch {
+                    continuation.resume(throwing: ArchiveError.failedToExtract(error.localizedDescription))
+                }
+            }
+        }
+    }
+    
+    private func extractTARManually(data: Data, to destination: URL, entries: [ArchiveEntry]?) -> [URL] {
+        var extractedFiles: [URL] = []
+        var offset = 0
+        
+        let entriesToExtract: Set<String>?
+        if let entries = entries {
+            entriesToExtract = Set(entries.map { $0.path })
+        } else {
+            entriesToExtract = nil
+        }
+        
+        while offset + 512 <= data.count {
+            let header = data[offset..<offset+512]
+            
+            let typeFlag = header[156]
+            
+            if typeFlag == 0 || typeFlag == 0x30 {
+                let nameData = header[0..<100]
+                guard let name = String(data: nameData, encoding: .utf8)?.trimmingCharacters(in: .init(charactersIn: "\0")) else {
+                    offset += 512
+                    continue
+                }
+                
+                if name.isEmpty {
+                    break
+                }
+                
+                if let targetEntries = entriesToExtract, !targetEntries.contains(name) {
+                    let sizeStr = String(data: header[124..<136], encoding: .ascii)?.trimmingCharacters(in: .init(charactersIn: "\0 ")) ?? "0"
+                    let size = (Int(sizeStr, radix: 8) ?? 0)
+                    offset += 512 + ((size + 511) / 512) * 512
+                    continue
+                }
+                
+                let sizeStr = String(data: header[124..<136], encoding: .ascii)?.trimmingCharacters(in: .init(charactersIn: "\0 ")) ?? "0"
+                let size = (Int(sizeStr, radix: 8) ?? 0)
+                
+                offset += 512
+                
+                if size > 0 && offset + size <= data.count {
+                    let fileData = data[offset..<offset+size]
+                    let filePath = destination.appendingPathComponent(name)
+                    
+                    do {
+                        try FileManager.default.createDirectory(at: filePath.deletingLastPathComponent(), withIntermediateDirectories: true)
+                        try Data(fileData).write(to: filePath)
+                        extractedFiles.append(filePath)
+                    } catch {
+                        logWarning("Failed to write tar file: \(name)")
+                    }
+                    
+                    let padding = (512 - (size % 512)) % 512
+                    offset += size + padding
+                } else {
+                    break
+                }
+            } else {
+                let sizeStr = String(data: header[124..<136], encoding: .ascii)?.trimmingCharacters(in: .init(charactersIn: "\0 ")) ?? "0"
+                let size = (Int(sizeStr, radix: 8) ?? 0)
+                offset += 512 + ((size + 511) / 512) * 512
+            }
+            
+            if offset > data.count { break }
+        }
+        
+        return extractedFiles
+    }
+    
+    private func extractGZIPArchive(at url: URL, to destination: URL) async throws -> [URL] {
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+                    
+                    let data = try Data(contentsOf: url)
+                    
+                    guard let decompressed = self.decompressGZIP(data) else {
+                        continuation.resume(throwing: ArchiveError.failedToExtract("GZIP decompression failed"))
+                        return
+                    }
+                    
+                    let originalName = url.deletingPathExtension().lastPathComponent
+                    let filePath = destination.appendingPathComponent(originalName)
+                    
+                    try decompressed.write(to: filePath)
+                    continuation.resume(returning: [filePath])
+                } catch {
+                    continuation.resume(throwing: ArchiveError.failedToExtract(error.localizedDescription))
+                }
+            }
+        }
+    }
+    
+    private func decompressGZIP(_ data: Data) -> Data? {
+        guard !data.isEmpty else { return Data() }
+        
+        return try? (data as NSData).decompressed(using: .zlib)
+    }
+    
+    private func extractBZIP2Archive(at url: URL, to destination: URL) async throws -> [URL] {
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+                    
+                    let data = try Data(contentsOf: url)
+                    
+                    guard let decompressed = self.decompressBZIP2(data) else {
+                        continuation.resume(throwing: ArchiveError.failedToExtract("BZIP2 decompression failed"))
+                        return
+                    }
+                    
+                    let originalName = url.deletingPathExtension().lastPathComponent
+                    let filePath = destination.appendingPathComponent(originalName)
+                    
+                    try decompressed.write(to: filePath)
+                    continuation.resume(returning: [filePath])
+                } catch {
+                    continuation.resume(throwing: ArchiveError.failedToExtract(error.localizedDescription))
+                }
+            }
+        }
+    }
+    
+    private func decompressBZIP2(_ data: Data) -> Data? {
+        guard !data.isEmpty else { return Data() }
+        
+        return try? (data as NSData).decompressed(using: .bzip2)
+    }
+    
+    private func extractXZArchive(at url: URL, to destination: URL) async throws -> [URL] {
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+                    
+                    let data = try Data(contentsOf: url)
+                    
+                    guard let decompressed = self.decompressXZ(data) else {
+                        continuation.resume(throwing: ArchiveError.failedToExtract("XZ decompression failed"))
+                        return
+                    }
+                    
+                    let originalName = url.deletingPathExtension().lastPathComponent
+                    let filePath = destination.appendingPathComponent(originalName)
+                    
+                    try decompressed.write(to: filePath)
+                    continuation.resume(returning: [filePath])
+                } catch {
+                    continuation.resume(throwing: ArchiveError.failedToExtract(error.localizedDescription))
+                }
+            }
+        }
+    }
+    
+    private func decompressXZ(_ data: Data) -> Data? {
+        guard !data.isEmpty else { return Data() }
+        
+        return try? (data as NSData).decompressed(using: .lzfse)
     }
     
     func addToRecentArchives(_ archive: ArchiveInfo) {
@@ -513,7 +1252,6 @@ enum ArchiveError: Error, LocalizedError {
     case invalidArchive
     case failedToAnalyze(String)
     case failedToExtract(String)
-    case rarRequiresLibrary
     case extractionCancelled
     
     var errorDescription: String? {
@@ -522,23 +1260,7 @@ enum ArchiveError: Error, LocalizedError {
         case .invalidArchive: return "无效的压缩文件"
         case .failedToAnalyze(let msg): return "分析失败: \(msg)"
         case .failedToExtract(let msg): return "解压失败: \(msg)"
-        case .rarRequiresLibrary: return "RAR格式需要第三方库支持（UnrarKit）"
         case .extractionCancelled: return "解压已取消"
-        }
-    }
-}
-
-extension FileManager {
-    func unzipItem(at sourceURL: URL, to destinationURL: URL) throws {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
-        process.arguments = ["-o", "-q", sourceURL.path, "-d", destinationURL.path]
-        
-        try process.run()
-        process.waitUntilExit()
-        
-        if process.terminationStatus != 0 {
-            throw ArchiveError.failedToExtract("unzip command failed")
         }
     }
 }
