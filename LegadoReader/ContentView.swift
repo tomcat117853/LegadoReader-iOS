@@ -28,26 +28,33 @@ struct ContentView: View {
                 }
                 .tag(2)
             
+            LocalBooksView()
+                .tabItem {
+                    Image(systemName: "folder.fill")
+                    Text("本地")
+                }
+                .tag(3)
+            
             ReadingProgressView()
                 .tabItem {
                     Image(systemName: "clock.fill")
                     Text("阅读")
                 }
-                .tag(3)
+                .tag(4)
             
             SourceManagementView()
                 .tabItem {
                     Image(systemName: "server.rack")
                     Text("书源")
                 }
-                .tag(4)
+                .tag(5)
             
             SettingsView()
                 .tabItem {
                     Image(systemName: "gear")
                     Text("设置")
                 }
-                .tag(5)
+                .tag(6)
         }
         .accentColor(.blue)
     }

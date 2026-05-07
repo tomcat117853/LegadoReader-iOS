@@ -19,6 +19,10 @@
 - **云书架同步**: iCloud 云端同步，支持书籍、书源、进度同步
 - **听书功能**: TTS 语音朗读，支持语速调节和多音色选择
 - **主题自定义**: 8种内置主题，支持自定义颜色创建主题
+- **本地书籍**: 支持 TXT、EPUB 格式本地文件阅读
+- **翻页效果**: 支持滚动、滑动、覆盖、仿真四种翻页模式
+- **简繁转换**: 支持简体中文与繁体中文相互转换
+- **WebDAV 同步**: 支持 WebDAV 服务器同步数据
 
 ### 阅读器特性
 - 多种背景颜色（白天、护眼、清新、夜间、纯黑）
@@ -53,13 +57,23 @@ LegadoReader/
 │   ├── DiscoverView.swift # 发现页面
 │   ├── RSSView.swift      # 订阅页面
 │   ├── SourceManagementView.swift # 书源管理
-│   └── SettingsView.swift # 设置页面
+│   ├── SettingsView.swift # 设置页面
+│   ├── LocalBooksView.swift # 本地书籍
+│   ├── PageTurnView.swift # 翻页效果
+│   └── ThemeSettingsView.swift # 主题设置
 ├── ViewModels/            # 视图模型
 │   ├── BookStore.swift    # 书籍数据管理
 │   └── SourceStore.swift  # 书源数据管理
 ├── Services/              # 服务层
 │   ├── DatabaseManager.swift # 数据库管理
-│   └── BookSourceParser.swift # 书源解析引擎
+│   ├── BookSourceParser.swift # 书源解析引擎
+│   ├── ReadingProgressSync.swift # 阅读进度同步
+│   ├── CloudSyncManager.swift # 云同步管理
+│   ├── AudioBookManager.swift # 听书功能
+│   ├── ThemeManager.swift # 主题管理
+│   ├── LocalBookManager.swift # 本地书籍管理
+│   ├── ChineseConverter.swift # 简繁转换
+│   └── WebDAVManager.swift # WebDAV 同步
 └── Resources/             # 资源文件
 ```
 
@@ -166,7 +180,7 @@ https://github.com/scinfu/SwiftSoup
 
 ### 环境要求
 - Xcode 15.0+
-- iOS 16.0+
+- iOS 15.4.1+
 - Swift 5.9+
 
 ### 构建步骤
