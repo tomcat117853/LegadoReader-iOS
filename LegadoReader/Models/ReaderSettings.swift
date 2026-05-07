@@ -10,11 +10,22 @@ class ReaderSettings: ObservableObject {
     @Published var backgroundColor: ReaderBackground = .white
     @Published var textColor: Color = .black
     @Published var pageTurnType: PageTurnType = .slide
+    @Published var pageTurnMode: PageTurnMode = .horizontal
     @Published var isNightMode: Bool = false
     @Published var keepScreenOn: Bool = true
     @Published var showStatusBar: Bool = true
     @Published var autoReadSpeed: Double = 3.0
     @Published var isAutoReading: Bool = false
+    @Published var autoScrollSpeed: Double = 1.0
+    @Published var showScrollIndicator: Bool = true
+    @Published var doubleTapToPause: Bool = true
+    @Published var horizontalPadding: CGFloat = 16
+    @Published var verticalPadding: CGFloat = 20
+    @Published var textAlignment: String = "left"
+    @Published var enablePageAnimation: Bool = true
+    @Published var showChapterTitle: Bool = true
+    @Published var tapZoneEnabled: Bool = true
+    @Published var brightness: Double = 0.5
     
     enum ReaderBackground: String, CaseIterable, Codable {
         case white = "FFFFFF"
@@ -51,6 +62,10 @@ class ReaderSettings: ObservableObject {
     
     var currentBackground: Color {
         isNightMode ? .black : backgroundColor.color
+    }
+    
+    func isVerticalScrollMode() -> Bool {
+        return pageTurnMode == .vertical
     }
 }
 
