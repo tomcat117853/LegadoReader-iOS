@@ -289,8 +289,15 @@ struct GroupDetailView: View {
     }
 }
 
+extension Optional where Wrapped == String {
+    var isNilOrEmpty: Bool {
+        return self?.isEmpty ?? true
+    }
+}
+
 struct GroupEditSheet: View {
     @Environment(\.dismiss) var dismiss
+    @StateObject private var groupManager = BookGroupManager.shared
     @State private var editInfo: GroupEditInfo
     @Binding var editInfoBinding: GroupEditInfo
     
@@ -298,6 +305,7 @@ struct GroupEditSheet: View {
     let onSave: (GroupEditInfo) -> Void
     
     @State private var showingIconPicker = false
+    @State private var showingPasswordSheet = false
     @State private var customName: String
     
     init(group: BookGroup, editInfo: Binding<GroupEditInfo>, onSave: @escaping (GroupEditInfo) -> Void) {
@@ -360,7 +368,48 @@ struct GroupEditSheet: View {
                 } header: {
                     Text("安全设置")
                 } footer: {
-                    Text("加锁后访问分组需要验证。隐藏后分组将不在书架中显示。")
+                    Text("加锁后访问分组需要验证密码。隐藏后分组将不在书架中显示。")
+                }
+                
+                Section {
+                    Button(action: { showingPasswordSheet = true }) {
+                        HStack {
+                            Image(systemName: editInfo.password.isNilOrEmpty ? "key" : "key.fill")
+                                .foregroundColor(editInfo.password.isNilOrEmpty ? .secondary : .orange)
+                            
+                            VStack(alignment: .leading) {
+                                Text(editInfo.password.isNilOrEmpty ? "设置密码" : "修改密码")
+                                    .foregroundColor(.primary)
+                                
+                                if let hint = editInfo.passwordHint, !hint.isEmpty {
+                                    Text("提示: \(hint)")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            
+                            Spacer()
+                            
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    
+                    if !editInfo.password.isNilOrEmpty {
+                        Button(role: .destructive, action: {
+                            editInfo.password = nil
+                            editInfo.passwordHint = nil
+                        }) {
+                            HStack {
+                                Image(systemName: "trash")
+                                Text("移除密码")
+                            }
+                        }
+                    }
+                } header: {
+                    Text("密码保护")
+                } footer: {
+                    Text("设置密码后，只有输入正确密码才能访问此分组")
                 }
                 
                 Section {
@@ -409,7 +458,117 @@ struct GroupEditSheet: View {
             .sheet(isPresented: $showingIconPicker) {
                 IconPickerSheet(selectedIcon: $editInfo.icon)
             }
+            .sheet(isPresented: $showingPasswordSheet) {
+                GroupPasswordSheet(
+                    currentPassword: editInfo.password,
+                    currentHint: editInfo.passwordHint,
+                    onSave: { newPassword, newHint in
+                        editInfo.password = newPassword
+                        editInfo.passwordHint = newHint
+                    }
+                )
+            }
         }
+    }
+}
+
+struct GroupPasswordSheet: View {
+    @Environment(\.dismiss) var dismiss
+    @State private var newPassword = ""
+    @State private var confirmPassword = ""
+    @State private var passwordHint = ""
+    @State private var errorMessage: String?
+    
+    let currentPassword: String?
+    let currentHint: String?
+    let onSave: (String?, String?) -> Void
+    
+    init(currentPassword: String?, currentHint: String?, onSave: @escaping (String?, String?) -> Void) {
+        self.currentPassword = currentPassword
+        self.currentHint = currentHint
+        self.onSave = onSave
+        self._passwordHint = State(initialValue: currentHint ?? "")
+    }
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                Section {
+                    SecureField("新密码", text: $newPassword)
+                        .textContentType(.newPassword)
+                        .autocapitalization(.none)
+                    
+                    SecureField("确认密码", text: $confirmPassword)
+                        .textContentType(.newPassword)
+                        .autocapitalization(.none)
+                } header: {
+                    Text("设置密码")
+                } footer: {
+                    Text("密码至少4个字符，留空则移除密码保护")
+                }
+                
+                Section {
+                    TextField("密码提示（可选）", text: $passwordHint)
+                } header: {
+                    Text("密码提示")
+                } footer: {
+                    Text("设置提示可帮助您记住密码")
+                }
+                
+                Section {
+                    if let error = errorMessage {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    }
+                }
+            }
+            .navigationTitle(currentPassword == nil ? "设置密码" : "修改密码")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("取消") {
+                        dismiss()
+                    }
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("保存") {
+                        savePassword()
+                    }
+                    .fontWeight(.semibold)
+                    .disabled(!canSave)
+                }
+            }
+        }
+    }
+    
+    private var canSave: Bool {
+        if newPassword.isEmpty {
+            return true
+        }
+        return newPassword.count >= 4 && newPassword == confirmPassword
+    }
+    
+    private func savePassword() {
+        if newPassword.isEmpty {
+            onSave(nil, nil)
+            dismiss()
+            return
+        }
+        
+        guard newPassword.count >= 4 else {
+            errorMessage = "密码至少需要4个字符"
+            return
+        }
+        
+        guard newPassword == confirmPassword else {
+            errorMessage = "两次输入的密码不一致"
+            return
+        }
+        
+        onSave(newPassword, passwordHint.isEmpty ? nil : passwordHint)
+        dismiss()
     }
 }
 

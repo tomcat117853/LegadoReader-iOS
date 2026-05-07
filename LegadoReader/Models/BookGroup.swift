@@ -12,6 +12,8 @@ struct BookGroup: Identifiable, Codable, Equatable {
     var updatedTime: Date
     var coverImage: String?
     var description: String?
+    var password: String?
+    var passwordHint: String?
     
     init(id: String = UUID().uuidString,
          name: String,
@@ -28,6 +30,8 @@ struct BookGroup: Identifiable, Codable, Equatable {
         self.updatedTime = Date()
         self.coverImage = nil
         self.description = nil
+        self.password = nil
+        self.passwordHint = nil
     }
     
     var bookCount: Int {
@@ -36,6 +40,10 @@ struct BookGroup: Identifiable, Codable, Equatable {
     
     var displayName: String {
         return name
+    }
+    
+    var hasPassword: Bool {
+        return password != nil && !(password?.isEmpty ?? true)
     }
 }
 
@@ -46,6 +54,8 @@ struct GroupEditInfo: Codable {
     var isLocked: Bool
     var isHidden: Bool
     var coverImage: String?
+    var password: String?
+    var passwordHint: String?
     
     init(from group: BookGroup) {
         self.name = group.name
@@ -54,6 +64,8 @@ struct GroupEditInfo: Codable {
         self.isLocked = group.isLocked
         self.isHidden = group.isHidden
         self.coverImage = group.coverImage
+        self.password = group.password
+        self.passwordHint = group.passwordHint
     }
     
     func apply(to group: inout BookGroup) {
@@ -63,6 +75,8 @@ struct GroupEditInfo: Codable {
         group.isLocked = isLocked
         group.isHidden = isHidden
         group.coverImage = coverImage
+        group.password = password
+        group.passwordHint = passwordHint
         group.updatedTime = Date()
     }
 }

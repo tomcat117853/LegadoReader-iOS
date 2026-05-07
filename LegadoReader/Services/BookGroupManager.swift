@@ -293,4 +293,67 @@ class BookGroupManager: BaseService, ObservableObject {
             saveGroups()
         }
     }
+    
+    func setGroupPassword(_ group: BookGroup, password: String?, hint: String? = nil) {
+        if let index = groups.firstIndex(where: { $0.id == group.id }) {
+            groups[index].password = password
+            groups[index].passwordHint = hint
+            if password != nil && !(password?.isEmpty ?? true) {
+                groups[index].isLocked = true
+            }
+            groups[index].updatedTime = Date()
+            saveGroups()
+            logInfo("Set password for group: \(group.name)")
+        }
+    }
+    
+    func removeGroupPassword(_ group: BookGroup) {
+        if let index = groups.firstIndex(where: { $0.id == group.id }) {
+            groups[index].password = nil
+            groups[index].passwordHint = nil
+            groups[index].isLocked = false
+            groups[index].updatedTime = Date()
+            saveGroups()
+            logInfo("Removed password from group: \(group.name)")
+        }
+    }
+    
+    func verifyGroupPassword(_ group: BookGroup, password: String) -> Bool {
+        return group.password == password
+    }
+    
+    func verifyAnyGroupPassword(_ password: String) -> (group: BookGroup, isMatch: Bool)? {
+        for group in groups {
+            if group.password == password {
+                return (group, true)
+            }
+        }
+        return nil
+    }
+    
+    func getLockedGroups() -> [BookGroup] {
+        return groups.filter { $0.isLocked && $0.hasPassword }
+    }
+    
+    func getGroupsWithPassword() -> [BookGroup] {
+        return groups.filter { $0.hasPassword }
+    }
+    
+    func hasGlobalPassword() -> Bool {
+        return UserDefaults.standard.string(forKey: "BookGroupGlobalPassword") != nil
+    }
+    
+    func setGlobalPassword(_ password: String) {
+        UserDefaults.standard.set(password, forKey: "BookGroupGlobalPassword")
+        logInfo("Set global password")
+    }
+    
+    func verifyGlobalPassword(_ password: String) -> Bool {
+        return UserDefaults.standard.string(forKey: "BookGroupGlobalPassword") == password
+    }
+    
+    func removeGlobalPassword() {
+        UserDefaults.standard.removeObject(forKey: "BookGroupGlobalPassword")
+        logInfo("Removed global password")
+    }
 }
