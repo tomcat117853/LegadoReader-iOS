@@ -32,6 +32,33 @@ class AudioBookManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate 
         let name: String
         let language: String
         let isPremium: Bool
+        let gender: VoiceGender
+    }
+    
+    enum VoiceGender: String {
+        case male = "男"
+        case female = "女"
+        case unknown = "未知"
+    }
+    
+    struct PresetVoice: Identifiable {
+        let id: String
+        let name: String
+        let gender: VoiceGender
+        let voiceIdentifier: String
+    }
+    
+    let presetVoices: [PresetVoice] = [
+        PresetVoice(id: "female", name: "小雅", gender: .female, voiceIdentifier: "com.apple.voice.compact.zh-CN.Xiaoya"),
+        PresetVoice(id: "male", name: "晓东", gender: .male, voiceIdentifier: "com.apple.voice.compact.zh-CN.Xiaodong")
+    ]
+    
+    func getDefaultFemaleVoice() -> PresetVoice {
+        return presetVoices.first { $0.gender == .female } ?? presetVoices[0]
+    }
+    
+    func getDefaultMaleVoice() -> PresetVoice {
+        return presetVoices.first { $0.gender == .male } ?? presetVoices[1]
     }
     
     override init() {
@@ -87,16 +114,28 @@ class AudioBookManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate 
         
         for voice in voices {
             if voice.language.hasPrefix("zh") || voice.language.hasPrefix("en") {
+                let gender: VoiceGender = determineGender(from: voice)
                 options.append(VoiceOption(
                     id: voice.identifier,
                     name: voice.name,
                     language: voice.language,
-                    isPremium: voice.quality == .enhanced
+                    isPremium: voice.quality == .enhanced,
+                    gender: gender
                 ))
             }
         }
         
         return options.sorted { ($0.isPremium ? 0 : 1) < ($1.isPremium ? 0 : 1) }
+    }
+    
+    private func determineGender(from voice: AVSpeechSynthesisVoice) -> VoiceGender {
+        let identifier = voice.identifier.lowercased()
+        if identifier.contains("female") || identifier.contains("xiaoya") || identifier.contains("tingting") || identifier.contains("meimei") {
+            return .female
+        } else if identifier.contains("male") || identifier.contains("xiaodong") || identifier.contains("liangliang") || identifier.contains("yaming") {
+            return .male
+        }
+        return .unknown
     }
     
     func prepareForBook(bookId: String, bookName: String, chapters: [Chapter], startChapter: Int = 0) {

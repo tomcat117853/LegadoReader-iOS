@@ -275,6 +275,39 @@ struct AudioBookSettingsView: View {
     var body: some View {
         NavigationView {
             List {
+                Section("推荐声音") {
+                    HStack(spacing: 16) {
+                        ForEach(audioManager.presetVoices) { preset in
+                            Button(action: {
+                                audioManager.setVoice(preset.voiceIdentifier)
+                            }) {
+                                VStack(spacing: 8) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(preset.gender == .female ? Color.pink.opacity(0.2) : Color.blue.opacity(0.2))
+                                            .frame(width: 60, height: 60)
+                                        
+                                        Image(systemName: preset.gender == .female ? "person.circle.fill" : "person.circle.fill")
+                                            .font(.system(size: 32))
+                                            .foregroundColor(preset.gender == .female ? .pink : .blue)
+                                    }
+                                    
+                                    Text(preset.name)
+                                        .font(.headline)
+                                        .foregroundColor(.primary)
+                                    
+                                    Text(preset.gender.rawValue)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                .padding()
+                                .background(audioManager.selectedVoice == preset.voiceIdentifier ? Color.blue.opacity(0.1) : Color.clear)
+                                .cornerRadius(12)
+                            }
+                        }
+                    }
+                }
+                
                 Section("朗读声音") {
                     ForEach(audioManager.getAvailableVoices()) { voice in
                         Button(action: {
@@ -282,8 +315,15 @@ struct AudioBookSettingsView: View {
                         }) {
                             HStack {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text(voice.name)
-                                        .foregroundColor(.primary)
+                                    HStack {
+                                        Text(voice.name)
+                                            .foregroundColor(.primary)
+                                        if voice.gender != .unknown {
+                                            Image(systemName: voice.gender == .female ? "circle.fill" : "circle.fill")
+                                                .font(.system(size: 10))
+                                                .foregroundColor(voice.gender == .female ? .pink : .blue)
+                                        }
+                                    }
                                     Text(voice.language)
                                         .font(.caption)
                                         .foregroundColor(.secondary)
