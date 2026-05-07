@@ -14,6 +14,7 @@ struct ReaderView: View {
     @State private var showingSettings = false
     @State private var showingChapterList = false
     @State private var showingMenu = false
+    @State private var showingAudioBook = false
     
     var body: some View {
         ZStack {
@@ -56,7 +57,8 @@ struct ReaderView: View {
                         currentChapter: currentChapter,
                         totalChapters: chapters.count,
                         onPrevious: loadPreviousChapter,
-                        onNext: loadNextChapter
+                        onNext: loadNextChapter,
+                        onAudioBook: startAudioBook
                     )
                     .background(readerSettings.currentBackground.opacity(0.95))
                 }
@@ -74,6 +76,9 @@ struct ReaderView: View {
                 }
             )
         }
+        .sheet(isPresented: $showingAudioBook) {
+            AudioBookView()
+        }
         .onAppear {
             loadInitialData()
         }
@@ -81,6 +86,16 @@ struct ReaderView: View {
             saveProgress()
         }
         .statusBar(hidden: !showingMenu)
+    }
+    
+    private func startAudioBook() {
+        AudioBookManager.shared.prepareForBook(
+            bookId: book.id,
+            bookName: book.name,
+            chapters: chapters,
+            startChapter: currentChapter?.index ?? 0
+        )
+        showingAudioBook = true
     }
     
     private func loadInitialData() {
@@ -228,6 +243,7 @@ struct ReaderBottomBar: View {
     let totalChapters: Int
     let onPrevious: () -> Void
     let onNext: () -> Void
+    let onAudioBook: () -> Void
     
     var body: some View {
         VStack(spacing: 0) {
@@ -259,6 +275,16 @@ struct ReaderBottomBar: View {
                     .foregroundColor(.primary)
                 }
                 .disabled(currentChapter?.index == 0)
+                
+                // 听书按钮
+                Button(action: onAudioBook) {
+                    HStack {
+                        Image(systemName: "headphones")
+                        Text("听书")
+                    }
+                    .font(.system(size: 16))
+                    .foregroundColor(.blue)
+                }
                 
                 Button(action: onNext) {
                     HStack {
