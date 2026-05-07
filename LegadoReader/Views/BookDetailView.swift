@@ -294,7 +294,7 @@ struct ChapterListView: View {
             .listStyle(.plain)
             .navigationTitle("目录")
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索章节")
+            .searchable(text: $searchText, prompt: "搜索章节")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("关闭") {

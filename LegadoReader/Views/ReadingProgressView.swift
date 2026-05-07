@@ -228,7 +228,7 @@ struct AllBooksProgressView: View {
         }
         .listStyle(.plain)
         .navigationTitle("全部进度")
-        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索书籍")
+        .searchable(text: $searchText, prompt: "搜索书籍")
         .overlay {
             if progressSync.getAllBooksProgress().isEmpty {
                 EmptyStateView(
