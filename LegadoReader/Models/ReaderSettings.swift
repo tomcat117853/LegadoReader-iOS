@@ -26,6 +26,13 @@ class ReaderSettings: ObservableObject {
     @Published var showChapterTitle: Bool = true
     @Published var tapZoneEnabled: Bool = true
     @Published var brightness: Double = 0.5
+    @Published var swipeGesturesEnabled: Bool = true
+    @Published var audioAutoFollowEnabled: Bool = false
+    @Published var audioAutoFollowMode: AudioFollowMode = .paragraph
+    @Published var hapticFeedbackEnabled: Bool = true
+    @Published var longPressEnabled: Bool = true
+    @Published var titleFormatEnabled: Bool = true
+    @Published var showMiniProgress: Bool = true
     
     enum ReaderBackground: String, CaseIterable, Codable {
         case white = "FFFFFF"
@@ -56,6 +63,12 @@ class ReaderSettings: ObservableObject {
         case none = "无动画"
     }
     
+    enum AudioFollowMode: String, CaseIterable, Codable {
+        case sentence = "句子"
+        case paragraph = "段落"
+        case chapter = "章节"
+    }
+    
     var currentTextColor: Color {
         isNightMode ? .white : textColor
     }
@@ -66,6 +79,14 @@ class ReaderSettings: ObservableObject {
     
     func isVerticalScrollMode() -> Bool {
         return pageTurnMode == .vertical
+    }
+    
+    func isSwipeEnabled() -> Bool {
+        return swipeGesturesEnabled && pageTurnMode != .none
+    }
+    
+    func isLongPressEnabled() -> Bool {
+        return longPressEnabled
     }
 }
 
