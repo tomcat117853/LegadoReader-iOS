@@ -303,4 +303,123 @@ class DatabaseManager {
             rule: rule
         )
     }
+    
+    // MARK: - Chapter Operations
+    
+    func saveChapter(_ chapter: Chapter, bookId: String) -> Bool {
+        let sql = """
+            INSERT OR REPLACE INTO chapters (
+                id, bookId, title, url, index, content, isLoaded
+            ) VALUES (?, ?, ?, ?, ?, ?, ?);
+        """
+        
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+            return false
+        }
+        
+        sqlite3_bind_text(statement, 1, (chapter.id as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(statement, 2, (bookId as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(statement, 3, (chapter.title as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(statement, 4, (chapter.url as NSString).utf8String, -1, nil)
+        sqlite3_bind_int(statement, 5, Int32(chapter.index))
+        sqlite3_bind_text(statement, 6, (chapter.content as NSString?)?.utf8String, -1, nil)
+        sqlite3_bind_int(statement, 7, chapter.isLoaded ? 1 : 0)
+        
+        let result = sqlite3_step(statement) == SQLITE_DONE
+        sqlite3_finalize(statement)
+        return result
+    }
+    
+    func getChapters(bookId: String) -> [Chapter] {
+        let sql = "SELECT * FROM chapters WHERE bookId = ? ORDER BY `index` ASC;"
+        var chapters: [Chapter] = []
+        var statement: OpaquePointer?
+        
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+            return chapters
+        }
+        
+        sqlite3_bind_text(statement, 1, (bookId as NSString).utf8String, -1, nil)
+        
+        while sqlite3_step(statement) == SQLITE_ROW {
+            if let chapter = chapterFromStatement(statement) {
+                chapters.append(chapter)
+            }
+        }
+        
+        sqlite3_finalize(statement)
+        return chapters
+    }
+    
+    func saveChapterContent(chapterId: String, content: String) -> Bool {
+        let sql = "UPDATE chapters SET content = ?, isLoaded = 1 WHERE id = ?;"
+        var statement: OpaquePointer?
+        
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+            return false
+        }
+        
+        sqlite3_bind_text(statement, 1, (content as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(statement, 2, (chapterId as NSString).utf8String, -1, nil)
+        
+        let result = sqlite3_step(statement) == SQLITE_DONE
+        sqlite3_finalize(statement)
+        return result
+    }
+    
+    func getChapterContent(chapterId: String) -> String? {
+        let sql = "SELECT content FROM chapters WHERE id = ?;"
+        var statement: OpaquePointer?
+        var content: String?
+        
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+            return nil
+        }
+        
+        sqlite3_bind_text(statement, 1, (chapterId as NSString).utf8String, -1, nil)
+        
+        if sqlite3_step(statement) == SQLITE_ROW {
+            content = sqlite3_column_text(statement, 0).flatMap { String(cString: $0) }
+        }
+        
+        sqlite3_finalize(statement)
+        return content
+    }
+    
+    func deleteChapters(bookId: String) -> Bool {
+        let sql = "DELETE FROM chapters WHERE bookId = ?;"
+        var statement: OpaquePointer?
+        
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+            return false
+        }
+        
+        sqlite3_bind_text(statement, 1, (bookId as NSString).utf8String, -1, nil)
+        let result = sqlite3_step(statement) == SQLITE_DONE
+        sqlite3_finalize(statement)
+        return result
+    }
+    
+    private func chapterFromStatement(_ statement: OpaquePointer?) -> Chapter? {
+        guard let statement = statement else { return nil }
+        
+        let id = String(cString: sqlite3_column_text(statement, 0))
+        let title = String(cString: sqlite3_column_text(statement, 2))
+        let url = String(cString: sqlite3_column_text(statement, 3))
+        let index = Int(sqlite3_column_int(statement, 4))
+        let content = sqlite3_column_text(statement, 5).flatMap { String(cString: $0) }
+        let isLoaded = sqlite3_column_int(statement, 6) == 1
+        
+        var chapter = Chapter(
+            id: id,
+            title: title,
+            url: url,
+            index: index
+        )
+        chapter.content = content
+        chapter.isLoaded = isLoaded
+        
+        return chapter
+    }
 }

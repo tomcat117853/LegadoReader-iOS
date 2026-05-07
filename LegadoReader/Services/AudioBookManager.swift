@@ -13,6 +13,9 @@ class AudioBookManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate 
     @Published var progress: Double = 0
     @Published var speechRate: Float = AVSpeechUtteranceDefaultSpeechRate
     @Published var volume: Float = 1.0
+    @Published var pitchMultiplier: Float = 1.0
+    @Published var prePhonemeDuration: Float = 0.0
+    @Published var postPhonemeDuration: Float = 0.0
     @Published var selectedVoice: String = "com.apple.voice.compact.zh-CN"
     @Published var error: String?
     
@@ -96,6 +99,14 @@ class AudioBookManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate 
             volume = 1.0
         }
         
+        pitchMultiplier = defaults.float(forKey: "AudioBook_pitchMultiplier")
+        if pitchMultiplier == 0 {
+            pitchMultiplier = 1.0
+        }
+        
+        prePhonemeDuration = defaults.float(forKey: "AudioBook_prePhonemeDuration")
+        postPhonemeDuration = defaults.float(forKey: "AudioBook_postPhonemeDuration")
+        
         if let voice = defaults.string(forKey: "AudioBook_voice") {
             selectedVoice = voice
         }
@@ -105,6 +116,9 @@ class AudioBookManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate 
         let defaults = UserDefaults.standard
         defaults.set(speechRate, forKey: "AudioBook_speechRate")
         defaults.set(volume, forKey: "AudioBook_volume")
+        defaults.set(pitchMultiplier, forKey: "AudioBook_pitchMultiplier")
+        defaults.set(prePhonemeDuration, forKey: "AudioBook_prePhonemeDuration")
+        defaults.set(postPhonemeDuration, forKey: "AudioBook_postPhonemeDuration")
         defaults.set(selectedVoice, forKey: "AudioBook_voice")
     }
     
@@ -190,7 +204,9 @@ class AudioBookManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate 
         let utterance = AVSpeechUtterance(string: text)
         utterance.rate = speechRate
         utterance.volume = volume
-        utterance.pitchMultiplier = 1.0
+        utterance.pitchMultiplier = pitchMultiplier
+        utterance.preUtteranceDelay = prePhonemeDuration
+        utterance.postUtteranceDelay = postPhonemeDuration
         
         if let voice = AVSpeechSynthesisVoice(identifier: selectedVoice) {
             utterance.voice = voice
@@ -200,6 +216,10 @@ class AudioBookManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate 
         
         currentUtterance = utterance
         synthesizer.speak(utterance)
+    }
+    
+    func speakPublic(text: String) {
+        speak(text: text)
     }
     
     func pause() {
@@ -255,9 +275,34 @@ class AudioBookManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate 
         saveSettings()
     }
     
+    func setPitch(_ pitch: Float) {
+        pitchMultiplier = max(0.5, min(pitch, 2.0))
+        saveSettings()
+    }
+    
+    func setPreUtteranceDelay(_ delay: Float) {
+        prePhonemeDuration = max(0, min(delay, 1.0))
+        saveSettings()
+    }
+    
+    func setPostUtteranceDelay(_ delay: Float) {
+        postPhonemeDuration = max(0, min(delay, 1.0))
+        saveSettings()
+    }
+    
     func setVoice(_ voiceId: String) {
         selectedVoice = voiceId
         saveSettings()
+    }
+    
+    func getPitchOptions() -> [(String, Float)] {
+        return [
+            ("低沉", 0.7),
+            ("较低", 0.85),
+            ("正常", 1.0),
+            ("较高", 1.15),
+            ("高亢", 1.3)
+        ]
     }
     
     func getSpeedOptions() -> [(String, Float)] {

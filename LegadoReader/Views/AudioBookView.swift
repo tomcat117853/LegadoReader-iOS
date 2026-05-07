@@ -2,29 +2,27 @@ import SwiftUI
 
 struct AudioBookView: View {
     @StateObject private var audioManager = AudioBookManager.shared
+    @StateObject private var onlineTTS = OnlineTTSManager.shared
     @Environment(\.dismiss) var dismiss
     @State private var showingSettings = false
     @State private var showingChapterList = false
+    @State private var isUsingOnlineTTS = false
     
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
-                // 封面和标题
-                CoverSection(audioManager: audioManager)
+                CoverSection(audioManager: audioManager, onlineTTS: onlineTTS)
                     .padding()
                 
-                // 进度条
                 ProgressSection(audioManager: audioManager)
                     .padding(.horizontal)
                 
                 Spacer()
                 
-                // 控制按钮
-                ControlSection(audioManager: audioManager)
+                ControlSection(audioManager: audioManager, onlineTTS: onlineTTS, isUsingOnlineTTS: $isUsingOnlineTTS)
                     .padding()
                 
-                // 底部功能栏
-                BottomBar(audioManager: audioManager, showingSettings: $showingSettings, showingChapterList: $showingChapterList)
+                BottomBar(audioManager: audioManager, showingSettings: $showingSettings, showingChapterList: $showingChapterList, isUsingOnlineTTS: $isUsingOnlineTTS)
                     .padding(.horizontal)
                     .padding(.bottom)
             }
@@ -44,7 +42,7 @@ struct AudioBookView: View {
                 }
             }
             .sheet(isPresented: $showingSettings) {
-                AudioBookSettingsView()
+                AudioBookSettingsView(isUsingOnlineTTS: $isUsingOnlineTTS)
             }
             .sheet(isPresented: $showingChapterList) {
                 AudioBookChapterListView(audioManager: audioManager)
@@ -55,10 +53,10 @@ struct AudioBookView: View {
 
 struct CoverSection: View {
     @ObservedObject var audioManager: AudioBookManager
+    @ObservedObject var onlineTTS: OnlineTTSManager
     
     var body: some View {
         VStack(spacing: 20) {
-            // 书籍封面
             ZStack {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(
@@ -82,7 +80,6 @@ struct CoverSection: View {
                 }
             }
             
-            // 书名和章节
             VStack(spacing: 8) {
                 Text(audioManager.currentBookName.isEmpty ? "未选择书籍" : audioManager.currentBookName)
                     .font(.title2)
@@ -94,6 +91,20 @@ struct CoverSection: View {
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .lineLimit(1)
+                
+                if onlineTTS.isPlaying {
+                    HStack(spacing: 4) {
+                        Image(systemName: "wifi")
+                            .font(.caption2)
+                        Text("在线语音")
+                            .font(.caption2)
+                    }
+                    .foregroundColor(.green)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.green.opacity(0.1))
+                    .cornerRadius(8)
+                }
             }
         }
     }
@@ -136,12 +147,12 @@ struct ProgressSection: View {
 
 struct ControlSection: View {
     @ObservedObject var audioManager: AudioBookManager
+    @ObservedObject var onlineTTS: OnlineTTSManager
+    @Binding var isUsingOnlineTTS: Bool
     
     var body: some View {
         VStack(spacing: 24) {
-            // 主控制按钮
             HStack(spacing: 40) {
-                // 上一章
                 Button(action: { audioManager.previousChapter() }) {
                     Image(systemName: "backward.fill")
                         .font(.system(size: 30))
@@ -150,42 +161,53 @@ struct ControlSection: View {
                 .disabled(audioManager.currentChapterIndex == 0)
                 .opacity(audioManager.currentChapterIndex == 0 ? 0.5 : 1)
                 
-                // 快退 15 秒
                 Button(action: { /* 快退 */ }) {
                     Image(systemName: "gobackward.15")
                         .font(.system(size: 24))
                         .foregroundColor(.primary)
                 }
                 
-                // 播放/暂停
                 Button(action: {
-                    if audioManager.isPlaying {
-                        audioManager.pause()
+                    if isUsingOnlineTTS {
+                        if onlineTTS.isPlaying {
+                            onlineTTS.pause()
+                        } else if onlineTTS.currentText.isEmpty {
+                            onlineTTS.speak(text: audioManager.currentText)
+                        } else {
+                            onlineTTS.resume()
+                        }
                     } else {
-                        audioManager.play()
+                        if audioManager.isPlaying {
+                            audioManager.pause()
+                        } else {
+                            audioManager.play()
+                        }
                     }
                 }) {
                     ZStack {
                         Circle()
-                            .fill(Color.blue)
+                            .fill(isUsingOnlineTTS && onlineTTS.isLoading ? Color.gray : Color.blue)
                             .frame(width: 70, height: 70)
                         
-                        Image(systemName: audioManager.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 30))
-                            .foregroundColor(.white)
+                        if isUsingOnlineTTS && onlineTTS.isLoading {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        } else {
+                            Image(systemName: getPlayButtonIcon())
+                                .font(.system(size: 30))
+                                .foregroundColor(.white)
+                        }
                     }
                 }
-                .disabled(!audioManager.isPrepared)
-                .opacity(audioManager.isPrepared ? 1 : 0.5)
+                .disabled(!audioManager.isPrepared && !isUsingOnlineTTS)
+                .opacity(audioManager.isPrepared || isUsingOnlineTTS ? 1 : 0.5)
                 
-                // 快进 15 秒
                 Button(action: { /* 快进 */ }) {
                     Image(systemName: "goforward.15")
                         .font(.system(size: 24))
                         .foregroundColor(.primary)
                 }
                 
-                // 下一章
                 Button(action: { audioManager.nextChapter() }) {
                     Image(systemName: "forward.fill")
                         .font(.system(size: 30))
@@ -195,28 +217,78 @@ struct ControlSection: View {
                 .opacity(audioManager.currentChapterIndex >= audioManager.chapters.count - 1 ? 0.5 : 1)
             }
             
-            // 速度控制
-            HStack(spacing: 16) {
-                Text("语速")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+            VStack(spacing: 16) {
+                HStack(spacing: 16) {
+                    Text(isUsingOnlineTTS ? "在线语音" : "本地语音")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Picker("语音类型", selection: $isUsingOnlineTTS) {
+                        Text("本地").tag(false)
+                        Text("在线").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 150)
+                    
+                    Spacer()
+                }
                 
-                Slider(
-                    value: Binding(
-                        get: { Double(audioManager.speechRate) },
-                        set: { audioManager.setSpeed(Float($0)) }
-                    ),
-                    in: Double(AVSpeechUtteranceMinimumSpeechRate)...Double(AVSpeechUtteranceMaximumSpeechRate)
-                )
-                .tint(.blue)
-                
-                Text(audioManager.formatSpeed(audioManager.speechRate))
-                    .font(.caption)
-                    .foregroundColor(.blue)
-                    .monospacedDigit()
-                    .frame(width: 50)
+                if isUsingOnlineTTS {
+                    HStack(spacing: 16) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text("当前声音")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Text(onlineTTS.selectedVoice.name)
+                                    .font(.caption)
+                                    .foregroundColor(.blue)
+                            }
+                            
+                            HStack {
+                                Text("朗读风格")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Text(onlineTTS.speechStyle.displayName)
+                                    .font(.caption)
+                                    .foregroundColor(.green)
+                            }
+                        }
+                    }
+                } else {
+                    HStack(spacing: 16) {
+                        Text("语速")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Slider(
+                            value: Binding(
+                                get: { Double(audioManager.speechRate) },
+                                set: { audioManager.setSpeed(Float($0)) }
+                            ),
+                            in: Double(AVSpeechUtteranceMinimumSpeechRate)...Double(AVSpeechUtteranceMaximumSpeechRate)
+                        )
+                        .tint(.blue)
+                        
+                        Text(audioManager.formatSpeed(audioManager.speechRate))
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                            .monospacedDigit()
+                            .frame(width: 50)
+                    }
+                }
             }
             .padding(.horizontal)
+        }
+    }
+    
+    private func getPlayButtonIcon() -> String {
+        if isUsingOnlineTTS {
+            return onlineTTS.isPlaying ? "pause.fill" : "play.fill"
+        } else {
+            return audioManager.isPlaying ? "pause.fill" : "play.fill"
         }
     }
 }
@@ -225,10 +297,10 @@ struct BottomBar: View {
     @ObservedObject var audioManager: AudioBookManager
     @Binding var showingSettings: Bool
     @Binding var showingChapterList: Bool
+    @Binding var isUsingOnlineTTS: Bool
     
     var body: some View {
         HStack {
-            // 章节列表
             Button(action: { showingChapterList = true }) {
                 VStack(spacing: 4) {
                     Image(systemName: "list.bullet")
@@ -240,7 +312,6 @@ struct BottomBar: View {
             }
             .frame(maxWidth: .infinity)
             
-            // 定时关闭
             Button(action: { /* 定时关闭 */ }) {
                 VStack(spacing: 4) {
                     Image(systemName: "moon.fill")
@@ -252,7 +323,17 @@ struct BottomBar: View {
             }
             .frame(maxWidth: .infinity)
             
-            // 设置
+            Button(action: { /* 语音切换提示 */ }) {
+                VStack(spacing: 4) {
+                    Image(systemName: isUsingOnlineTTS ? "wifi" : "iphone")
+                        .font(.system(size: 20))
+                    Text(isUsingOnlineTTS ? "在线" : "本地")
+                        .font(.caption2)
+                }
+                .foregroundColor(isUsingOnlineTTS ? .green : .primary)
+            }
+            .frame(maxWidth: .infinity)
+            
             Button(action: { showingSettings = true }) {
                 VStack(spacing: 4) {
                     Image(systemName: "slider.horizontal.3")
@@ -270,87 +351,117 @@ struct BottomBar: View {
 
 struct AudioBookSettingsView: View {
     @StateObject private var audioManager = AudioBookManager.shared
+    @StateObject private var onlineTTS = OnlineTTSManager.shared
+    @Binding var isUsingOnlineTTS: Bool
     @Environment(\.dismiss) var dismiss
     
     var body: some View {
         NavigationView {
             List {
-                Section("推荐声音") {
-                    HStack(spacing: 16) {
-                        ForEach(audioManager.presetVoices) { preset in
+                Section {
+                    Toggle("使用在线语音合成", isOn: $isUsingOnlineTTS)
+                } header: {
+                    Text("语音类型")
+                } footer: {
+                    Text("在线语音使用网络服务，支持更多有感情的声音")
+                }
+                
+                if isUsingOnlineTTS {
+                    Section("在线声音") {
+                        ForEach(onlineTTS.getChineseVoices()) { voice in
                             Button(action: {
-                                audioManager.setVoice(preset.voiceIdentifier)
+                                onlineTTS.selectVoice(voice)
                             }) {
-                                VStack(spacing: 8) {
-                                    ZStack {
-                                        Circle()
-                                            .fill(preset.gender == .female ? Color.pink.opacity(0.2) : Color.blue.opacity(0.2))
-                                            .frame(width: 60, height: 60)
-                                        
-                                        Image(systemName: preset.gender == .female ? "person.circle.fill" : "person.circle.fill")
-                                            .font(.system(size: 32))
-                                            .foregroundColor(preset.gender == .female ? .pink : .blue)
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        HStack {
+                                            Text(voice.name)
+                                                .foregroundColor(.primary)
+                                            if voice.isNeural {
+                                                Text("神经网络")
+                                                    .font(.caption2)
+                                                    .padding(.horizontal, 4)
+                                                    .padding(.vertical, 2)
+                                                    .background(Color.blue.opacity(0.2))
+                                                    .foregroundColor(.blue)
+                                                    .cornerRadius(4)
+                                            }
+                                        }
+                                        Text("\(voice.language) • \(voice.service.rawValue)")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
                                     }
                                     
-                                    Text(preset.name)
-                                        .font(.headline)
-                                        .foregroundColor(.primary)
+                                    Spacer()
                                     
-                                    Text(preset.gender.rawValue)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
+                                    if voice.id == onlineTTS.selectedVoice.id {
+                                        Image(systemName: "checkmark")
+                                            .foregroundColor(.blue)
+                                    }
                                 }
-                                .padding()
-                                .background(audioManager.selectedVoice == preset.voiceIdentifier ? Color.blue.opacity(0.1) : Color.clear)
-                                .cornerRadius(12)
+                            }
+                        }
+                    }
+                    
+                    Section("朗读风格") {
+                        ForEach(onlineTTS.getAvailableStyles()) { style in
+                            Button(action: {
+                                onlineTTS.speechStyle = style
+                            }) {
+                                HStack {
+                                    Text(style.displayName)
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    if style == onlineTTS.speechStyle {
+                                        Image(systemName: "checkmark")
+                                            .foregroundColor(.blue)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    Section("在线服务设置") {
+                        NavigationLink(destination: OnlineTTSConfigView()) {
+                            HStack {
+                                Image(systemName: "gear")
+                                    .foregroundColor(.blue)
+                                Text("API 配置")
                             }
                         }
                     }
                 }
                 
-                Section("朗读声音") {
-                    ForEach(audioManager.getAvailableVoices()) { voice in
+                Section("本地声音") {
+                    ForEach(audioManager.presetVoices) { preset in
                         Button(action: {
-                            audioManager.setVoice(voice.id)
+                            audioManager.setVoice(preset.voiceIdentifier)
                         }) {
                             HStack {
                                 VStack(alignment: .leading, spacing: 4) {
                                     HStack {
-                                        Text(voice.name)
+                                        Text(preset.name)
                                             .foregroundColor(.primary)
-                                        if voice.gender != .unknown {
-                                            Image(systemName: voice.gender == .female ? "circle.fill" : "circle.fill")
-                                                .font(.system(size: 10))
-                                                .foregroundColor(voice.gender == .female ? .pink : .blue)
-                                        }
+                                        Image(systemName: preset.gender == .female ? "person.circle.fill" : "person.circle.fill")
+                                            .foregroundColor(preset.gender == .female ? .pink : .blue)
                                     }
-                                    Text(voice.language)
+                                    Text(preset.gender.rawValue)
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
                                 
                                 Spacer()
                                 
-                                if voice.id == audioManager.selectedVoice {
+                                if audioManager.selectedVoice == preset.voiceIdentifier {
                                     Image(systemName: "checkmark")
                                         .foregroundColor(.blue)
-                                }
-                                
-                                if voice.isPremium {
-                                    Text("增强")
-                                        .font(.caption2)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(Color.purple.opacity(0.2))
-                                        .foregroundColor(.purple)
-                                        .cornerRadius(4)
                                 }
                             }
                         }
                     }
                 }
                 
-                Section("朗读语速") {
+                Section("本地朗读语速") {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
                             Text("当前语速")
@@ -400,6 +511,37 @@ struct AudioBookSettingsView: View {
                     }
                 }
                 
+                Section("本地音调") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("音调")
+                            Spacer()
+                            Text(audioManager.getPitchOptions().first { abs(audioManager.pitchMultiplier - $0.1) < 0.01 }?.0 ?? "自定义")
+                                .foregroundColor(.green)
+                        }
+                        
+                        Slider(
+                            value: Binding(
+                                get: { Double(audioManager.pitchMultiplier) },
+                                set: { audioManager.setPitch(Float($0)) }
+                            ),
+                            in: 0.5...2.0
+                        )
+                        .tint(.green)
+                        
+                        HStack {
+                            Text("低沉")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Text("高亢")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+                
                 Section("音量") {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
@@ -434,7 +576,7 @@ struct AudioBookSettingsView: View {
                 Section("定时关闭") {
                     ForEach(["关闭", "15 分钟", "30 分钟", "45 分钟", "60 分钟", "章节结束"], id: \.self) { option in
                         Button(action: {
-                            // 设置定时
+                            
                         }) {
                             HStack {
                                 Text(option)
@@ -456,6 +598,46 @@ struct AudioBookSettingsView: View {
                 }
             }
         }
+    }
+}
+
+struct OnlineTTSConfigView: View {
+    @StateObject private var onlineTTS = OnlineTTSManager.shared
+    @State private var azureApiKey = ""
+    @State private var azureRegion = "eastasia"
+    
+    var body: some View {
+        List {
+            Section {
+                TextField("API Key", text: $azureApiKey)
+                    .textContentType(.password)
+                    .autocapitalization(.none)
+            } header: {
+                Text("微软 Azure API")
+            } footer: {
+                Text("输入您的 Azure 语音服务 API Key 以使用更多高质量声音")
+            }
+            
+            Section("区域") {
+                Picker("选择区域", selection: $azureRegion) {
+                    Text("东亚 (eastasia)").tag("eastasia")
+                    Text("东南亚 (southeastasia)").tag("southeastasia")
+                    Text("美国东部 (eastus)").tag("eastus")
+                    Text("西欧 (westeurope)").tag("westeurope")
+                }
+            }
+            
+            Section {
+                Button("保存配置") {
+                    var config = OnlineTTSManager.TTSConfig.default
+                    config.azureApiKey = azureApiKey
+                    config.azureRegion = azureRegion
+                    onlineTTS.saveConfig(config)
+                }
+                .foregroundColor(.blue)
+            }
+        }
+        .navigationTitle("API 配置")
     }
 }
 

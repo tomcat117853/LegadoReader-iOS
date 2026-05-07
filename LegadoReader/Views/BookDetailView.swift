@@ -82,39 +82,69 @@ struct BookDetailView: View {
 
 struct BookHeaderView: View {
     let book: Book
+    @State private var showingCoverManagement = false
+    @StateObject private var coverManager = CoverManager.shared
+    @State private var currentCover: UIImage?
     
     var body: some View {
-        HStack(alignment: .top, spacing: 16) {
-            // 封面
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.gray.opacity(0.2))
-                    .frame(width: 100, height: 140)
-                
-                if let cover = book.cover, let url = URL(string: cover) {
-                    AsyncImage(url: url) { image in
-                        image
+        VStack(spacing: 12) {
+            HStack(alignment: .top, spacing: 16) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.gray.opacity(0.2))
+                        .frame(width: 100, height: 140)
+                    
+                    if let cover = currentCover {
+                        Image(uiImage: cover)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        ProgressView()
-                    }
-                    .frame(width: 100, height: 140)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                } else {
-                    VStack {
-                        Image(systemName: "book.fill")
-                            .font(.system(size: 40))
-                            .foregroundColor(.gray)
-                        Text(book.name.prefix(1))
-                            .font(.title2)
-                            .foregroundColor(.gray)
+                            .frame(width: 100, height: 140)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    } else if let cover = book.cover, let url = URL(string: cover) {
+                        AsyncImage(url: url) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        } placeholder: {
+                            ProgressView()
+                        }
+                        .frame(width: 100, height: 140)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    } else {
+                        VStack {
+                            Image(systemName: "book.fill")
+                                .font(.system(size: 40))
+                                .foregroundColor(.gray)
+                            Text(book.name.prefix(1))
+                                .font(.title2)
+                                .foregroundColor(.gray)
+                        }
                     }
                 }
+                .shadow(radius: 4)
+                .onTapGesture {
+                    showingCoverManagement = true
+                }
+                
+                Button(action: {
+                    showingCoverManagement = true
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "photo.badge.plus")
+                            .font(.caption)
+                        Text("换封面")
+                            .font(.caption)
+                    }
+                    .foregroundColor(.blue)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(8)
+                }
+                
+                Spacer()
             }
-            .shadow(radius: 4)
             
-            // 信息
             VStack(alignment: .leading, spacing: 8) {
                 Text(book.name)
                     .font(.system(size: 20, weight: .bold))
@@ -142,8 +172,22 @@ struct BookHeaderView: View {
                         .lineLimit(1)
                 }
             }
-            
-            Spacer()
+        }
+        .sheet(isPresented: $showingCoverManagement) {
+            CoverManagementView(book: book)
+        }
+        .onAppear {
+            loadCurrentCover()
+        }
+    }
+    
+    private func loadCurrentCover() {
+        Task {
+            if let image = await coverManager.fetchCoverImage(for: book) {
+                await MainActor.run {
+                    currentCover = image
+                }
+            }
         }
     }
 }
@@ -155,47 +199,95 @@ struct ActionButtonsView: View {
     let onAddToBookshelf: () -> Void
     let onShowChapters: () -> Void
     
+    @StateObject private var notificationManager = UpdateNotificationManager.shared
+    @State private var showingNotificationSettings = false
+    
+    private var isSubscribed: Bool {
+        notificationManager.isSubscribed(book.id)
+    }
+    
     var body: some View {
-        HStack(spacing: 12) {
-            Button(action: onRead) {
-                HStack {
-                    Image(systemName: "book.open")
-                    Text("开始阅读")
+        VStack(spacing: 12) {
+            HStack(spacing: 12) {
+                Button(action: onRead) {
+                    HStack {
+                        Image(systemName: "book.open")
+                        Text("开始阅读")
+                    }
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.blue)
+                    .cornerRadius(8)
                 }
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(Color.blue)
-                .cornerRadius(8)
+                
+                Button(action: onAddToBookshelf) {
+                    HStack {
+                        Image(systemName: isInBookshelf ? "checkmark" : "plus")
+                        Text(isInBookshelf ? "已在书架" : "加入书架")
+                    }
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.blue)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(8)
+                }
+                .disabled(isInBookshelf)
+                
+                Button(action: onShowChapters) {
+                    HStack {
+                        Image(systemName: "list.bullet")
+                        Text("目录")
+                    }
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.blue)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(8)
+                }
             }
             
-            Button(action: onAddToBookshelf) {
-                HStack {
-                    Image(systemName: isInBookshelf ? "checkmark" : "plus")
-                    Text(isInBookshelf ? "已在书架" : "加入书架")
+            HStack(spacing: 12) {
+                Button(action: {
+                    if isSubscribed {
+                        notificationManager.unsubscribeBook(book.id)
+                    } else {
+                        showingNotificationSettings = true
+                    }
+                }) {
+                    HStack {
+                        Image(systemName: isSubscribed ? "bell.fill" : "bell")
+                        Text(isSubscribed ? "已订阅更新" : "订阅更新")
+                    }
+                    .font(.system(size: 14))
+                    .foregroundColor(isSubscribed ? .green : .orange)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background((isSubscribed ? Color.green : Color.orange).opacity(0.1))
+                    .cornerRadius(8)
                 }
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.blue)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(Color.blue.opacity(0.1))
-                .cornerRadius(8)
-            }
-            .disabled(isInBookshelf)
-            
-            Button(action: onShowChapters) {
-                HStack {
-                    Image(systemName: "list.bullet")
-                    Text("目录")
+                
+                Button(action: {
+                    showingNotificationSettings = true
+                }) {
+                    HStack {
+                        Image(systemName: "slider.horizontal.3")
+                        Text("提醒设置")
+                    }
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(8)
                 }
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.blue)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(Color.blue.opacity(0.1))
-                .cornerRadius(8)
             }
+        }
+        .sheet(isPresented: $showingNotificationSettings) {
+            SubscriptionSettingsSheet(book: book, isAlreadySubscribed: isSubscribed)
         }
     }
 }

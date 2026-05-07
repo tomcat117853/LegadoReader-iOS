@@ -1,0 +1,83 @@
+# Xcode
+.DS_Store
+*.xcuserstate
+*.xcworkspacedata
+*.xccheckout
+*.moved-aside
+DerivedData
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# CocoaPods
+Pods/
+Podfile.lock
+*.xcworkspace
+
+# Swift Package Manager
+.build/
+Packages/
+*.xcodeproj
+
+# Carthage
+Carthage/Build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Build logs
+*.log
+build/
+Logs/
+
+# Test coverage
+*.gcda
+*.gcno
+*.gcov
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~
+
+# User-specific files
+*.orig
+*.user
+*.userosscache
+*.sln.docstates
+
+# CI
+.travis.yml
+.circleci/
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+
+# Android
+.gradle/
+local.properties
+app/build/
+build/
+
+# macOS
+*.pem
+.env
+.env.local
+
+# iOS
+LegadoReader.xcodeproj/xcuserdata/
+LegadoReader.xcworkspace/xcuserdata/
+*.xcuserstate
+UserInterfaceState.xcuserstate
+
+# LegadoReader specific
+Library/
+tmp/
+*.log

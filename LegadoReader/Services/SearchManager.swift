@@ -118,7 +118,38 @@ class SearchManager: ObservableObject {
     }
     
     private func loadBookChapters(_ book: Book) -> [(index: Int, title: String, content: String)] {
-        return []
+        var chapters: [(index: Int, title: String, content: String)] = []
+        
+        var bookChapters = DatabaseManager.shared.getChapters(bookId: book.id)
+        
+        if bookChapters.isEmpty {
+            bookChapters = BookSourceParser.shared.getChapterList(bookUrl: book.bookUrl)
+            for chapter in bookChapters {
+                DatabaseManager.shared.saveChapter(chapter, bookId: book.id)
+            }
+        }
+        
+        for chapter in bookChapters {
+            let content: String
+            if let loadedContent = chapter.content, !loadedContent.isEmpty {
+                content = loadedContent
+            } else {
+                let fetchedContent = BookSourceParser.shared.getChapterContent(
+                    bookUrl: book.bookUrl,
+                    chapterUrl: chapter.url
+                )
+                DatabaseManager.shared.saveChapterContent(chapterId: chapter.id, content: fetchedContent)
+                content = fetchedContent
+            }
+            
+            chapters.append((
+                index: chapter.index,
+                title: chapter.title,
+                content: content
+            ))
+        }
+        
+        return chapters
     }
     
     func searchInContent(_ keyword: String, content: String, maxResults: Int = 20) -> [(range: Range<String.Index>, context: String)] {

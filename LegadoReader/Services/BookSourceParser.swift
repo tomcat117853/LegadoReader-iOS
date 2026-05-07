@@ -151,7 +151,7 @@ class BookSourceParser {
             }
         } while true
         
-        return content
+        return ContentFilterManager.shared.filter(content)
     }
     
     private func cleanContent(_ html: String, replaceRules: [ReplaceRule]?) -> String {
