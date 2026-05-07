@@ -15,6 +15,10 @@ struct SettingsView: View {
                         Label("阅读界面设置", systemImage: "textformat.size")
                     }
                     
+                    NavigationLink(destination: ThemeSettingsView()) {
+                        Label("主题设置", systemImage: "palette")
+                    }
+                    
                     Toggle("夜间模式跟随系统", isOn: .constant(false))
                     
                     Toggle("自动翻页", isOn: $readerSettings.isAutoReading)
