@@ -106,6 +106,47 @@ struct SettingsView: View {
                     }
                 }
                 
+                // 高级功能
+                Section("高级功能") {
+                    NavigationLink(destination: WebServiceSettingsView()) {
+                        HStack {
+                            Image(systemName: "server.rack")
+                                .foregroundColor(.blue)
+                            Text("Web 服务")
+                            Spacer()
+                            if WebServiceManager.shared.isRunning {
+                                Circle()
+                                    .fill(Color.green)
+                                    .frame(width: 8, height: 8)
+                            }
+                        }
+                    }
+                    
+                    NavigationLink(destination: WebDAVSettingsView()) {
+                        HStack {
+                            Image(systemName: "externaldrive.connected.to.line.below")
+                                .foregroundColor(.purple)
+                            Text("WebDAV 同步")
+                        }
+                    }
+                    
+                    NavigationLink(destination: ChineseConverterSettingsView()) {
+                        HStack {
+                            Image(systemName: "character.bubble")
+                                .foregroundColor(.orange)
+                            Text("简繁转换")
+                        }
+                    }
+                    
+                    NavigationLink(destination: PageTurnSettingsView()) {
+                        HStack {
+                            Image(systemName: "book.pages")
+                                .foregroundColor(.green)
+                            Text("翻页设置")
+                        }
+                    }
+                }
+                
                 // 关于
                 Section("关于") {
                     HStack {
