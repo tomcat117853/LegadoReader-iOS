@@ -1,185 +1,422 @@
 import Foundation
 import Combine
 
-class BookmarkManager: BaseDataManager<BookmarkManager.Bookmark> {
+class BookmarkManager: BaseService, ObservableObject {
     static let shared = BookmarkManager()
     
+    @Published var bookmarks: [Bookmark] = []
+    @Published var folders: [BookmarkFolder] = []
+    @Published var currentSortOption: BookmarkSortOption = .custom
+    @Published var currentFilter: BookmarkFilter = BookmarkFilter()
+    @Published var isEditing = false
+    
+    private let bookmarksKey = "BookmarkManager_bookmarks"
+    private let foldersKey = "BookmarkManager_folders"
+    private let sortKey = "BookmarkManager_sortOption"
+    
     private init() {
-        super.init(dataKey: "BookmarkManager_bookmarks")
+        super.init()
+        loadBookmarks()
+        loadFolders()
+        loadSortOption()
     }
     
-    struct Bookmark: Identifiable, Codable, Equatable {
-        let id: String
-        let bookId: String
-        let bookName: String
-        let chapterId: String
-        let chapterTitle: String
-        var position: Int
-        var content: String
-        var note: String
-        let createdTime: Date
-        var updatedTime: Date
-        var color: BookmarkColor
+    var filteredBookmarks: [Bookmark] {
+        let filtered = bookmarks.filter { currentFilter.matches($0) }
         
-        enum BookmarkColor: String, Codable, CaseIterable {
-            case red = "red"
-            case orange = "orange"
-            case yellow = "yellow"
-            case green = "green"
-            case blue = "blue"
-            case purple = "purple"
-            
-            var displayName: String {
-                switch self {
-                case .red: return "红色"
-                case .orange: return "橙色"
-                case .yellow: return "黄色"
-                case .green: return "绿色"
-                case .blue: return "蓝色"
-                case .purple: return "紫色"
-                }
+        return filtered.sorted { b1, b2 in
+            if b1.isPinned != b2.isPinned {
+                return b1.isPinned
             }
-            
-            var colorValue: String {
-                switch self {
-                case .red: return "#FF3B30"
-                case .orange: return "#FF9500"
-                case .yellow: return "#FFCC00"
-                case .green: return "#34C759"
-                case .blue: return "#007AFF"
-                case .purple: return "#AF52DE"
-                }
-            }
+            return currentSortOption.compare(b1, b2)
         }
     }
     
-    func addBookmark(bookId: String, bookName: String, chapterId: String, chapterTitle: String, position: Int, content: String, note: String = "", color: Bookmark.BookmarkColor = .blue) {
-        let bookmark = Bookmark(
-            id: UUID().uuidString,
-            bookId: bookId,
-            bookName: bookName,
-            chapterId: chapterId,
-            chapterTitle: chapterTitle,
-            position: position,
-            content: content,
-            note: note,
-            createdTime: Date(),
-            updatedTime: Date(),
-            color: color
-        )
-        
-        items.insert(bookmark, at: 0)
-        saveData()
+    var pinnedBookmarks: [Bookmark] {
+        return bookmarks.filter { $0.isPinned }
+    }
+    
+    var favoriteBookmarks: [Bookmark] {
+        return bookmarks.filter { $0.isFavorite }
+    }
+    
+    var bookmarksByCategory: [BookmarkCategory: [Bookmark]] {
+        return Dictionary(grouping: bookmarks) { $0.category }
+    }
+    
+    func loadBookmarks() {
+        if let saved = loadCodable([Bookmark].self, key: bookmarksKey) {
+            bookmarks = saved
+        }
+    }
+    
+    func saveBookmarks() {
+        saveCodable(bookmarks, key: bookmarksKey)
+    }
+    
+    func loadFolders() {
+        if let saved = loadCodable([BookmarkFolder].self, key: foldersKey) {
+            folders = saved
+        }
+    }
+    
+    func saveFolders() {
+        saveCodable(folders, key: foldersKey)
+    }
+    
+    func loadSortOption() {
+        if let saved = loadCodable(String.self, key: sortKey),
+           let option = BookmarkSortOption(rawValue: saved) {
+            currentSortOption = option
+        }
+    }
+    
+    func saveSortOption() {
+        saveCodable(currentSortOption.rawValue, key: sortKey)
+    }
+    
+    func addBookmark(name: String, url: String, icon: String = "link", category: BookmarkCategory = .general) {
+        let bookmark = Bookmark(name: name, url: url, icon: icon, category: category)
+        bookmarks.append(bookmark)
+        saveBookmarks()
+        logInfo("Added bookmark: \(name)")
+    }
+    
+    func deleteBookmark(_ bookmark: Bookmark) {
+        bookmarks.removeAll { $0.id == bookmark.id }
+        removeFromAllFolders(bookmark.id)
+        saveBookmarks()
+        logInfo("Deleted bookmark: \(bookmark.name)")
     }
     
     func updateBookmark(_ bookmark: Bookmark) {
-        if let index = items.firstIndex(where: { $0.id == bookmark.id }) {
-            var updatedBookmark = bookmark
-            updatedBookmark.updatedTime = Date()
-            items[index] = updatedBookmark
-            saveData()
+        if let index = bookmarks.firstIndex(where: { $0.id == bookmark.id }) {
+            bookmarks[index] = bookmark
+            bookmarks[index].updatedTime = Date()
+            saveBookmarks()
+            logInfo("Updated bookmark: \(bookmark.name)")
         }
     }
     
-    func updateNote(id: String, note: String) {
-        if let index = items.firstIndex(where: { $0.id == id }) {
-            items[index].note = note
-            items[index].updatedTime = Date()
-            saveData()
+    func updateBookmarkInfo(_ bookmarkId: String, editInfo: BookmarkEditInfo) {
+        if let index = bookmarks.firstIndex(where: { $0.id == bookmarkId }) {
+            editInfo.apply(to: &bookmarks[index])
+            saveBookmarks()
         }
     }
     
-    func updateColor(id: String, color: Bookmark.BookmarkColor) {
-        if let index = items.firstIndex(where: { $0.id == id }) {
-            items[index].color = color
-            items[index].updatedTime = Date()
-            saveData()
-        }
-    }
-    
-    func getBookmarks(for bookId: String) -> [Bookmark] {
-        return items.filter { $0.bookId == bookId }
-    }
-    
-    func getBookmarks(for bookId: String, chapterId: String) -> [Bookmark] {
-        return items.filter { $0.bookId == bookId && $0.chapterId == chapterId }
-    }
-    
-    func hasBookmark(bookId: String, chapterId: String, position: Int, range: Int = 50) -> Bool {
-        return items.contains { bookmark in
-            bookmark.bookId == bookId &&
-            bookmark.chapterId == chapterId &&
-            abs(bookmark.position - position) < range
-        }
-    }
-    
-    func removeAllBookmarks(for bookId: String) {
-        items.removeAll { $0.bookId == bookId }
-        saveData()
-    }
-    
-    func getRecentBookmarks(limit: Int = 10) -> [Bookmark] {
-        return Array(items.prefix(limit))
-    }
-    
-    func searchBookmarks(keyword: String) -> [Bookmark] {
-        guard !keyword.isEmpty else { return items }
+    func moveBookmark(from source: IndexSet, to destination: Int) {
+        let filtered = filteredBookmarks
+        var movedBookmark = filtered[source.first!]
+        bookmarks.removeAll { $0.id == movedBookmark.id }
         
-        return items.filter { bookmark in
-            bookmark.bookName.contains(keyword) ||
-            bookmark.chapterTitle.contains(keyword) ||
-            bookmark.content.contains(keyword) ||
-            bookmark.note.contains(keyword)
-        }
-    }
-    
-    func importBookmarks(from data: Data) -> Bool {
-        guard let importedBookmarks = decodeJSON([Bookmark].self, from: data) else {
-            return false
-        }
-        
-        var mergedBookmarks = items
-        
-        for imported in importedBookmarks {
-            if !mergedBookmarks.contains(where: { $0.id == imported.id }) {
-                mergedBookmarks.append(imported)
+        var targetIndex = 0
+        if destination < filtered.count {
+            let targetBookmark = filtered[destination]
+            if let index = bookmarks.firstIndex(where: { $0.id == targetBookmark.id }) {
+                targetIndex = index
             }
         }
         
-        mergedBookmarks.sort { $0.createdTime > $1.createdTime }
+        bookmarks.insert(movedBookmark, at: min(targetIndex, bookmarks.count))
         
-        items = mergedBookmarks
-        saveData()
+        for (index, _) in bookmarks.enumerated() {
+            bookmarks[index].customOrder = index
+        }
         
+        saveBookmarks()
+    }
+    
+    func togglePin(_ bookmark: Bookmark) {
+        if let index = bookmarks.firstIndex(where: { $0.id == bookmark.id }) {
+            bookmarks[index].isPinned.toggle()
+            bookmarks[index].updatedTime = Date()
+            saveBookmarks()
+            logInfo("Toggled pin for bookmark: \(bookmark.name) -> \(bookmarks[index].isPinned)")
+        }
+    }
+    
+    func toggleFavorite(_ bookmark: Bookmark) {
+        if let index = bookmarks.firstIndex(where: { $0.id == bookmark.id }) {
+            bookmarks[index].isFavorite.toggle()
+            bookmarks[index].updatedTime = Date()
+            saveBookmarks()
+            logInfo("Toggled favorite for bookmark: \(bookmark.name) -> \(bookmarks[index].isFavorite)")
+        }
+    }
+    
+    func visitBookmark(_ bookmark: Bookmark) {
+        if let index = bookmarks.firstIndex(where: { $0.id == bookmark.id }) {
+            bookmarks[index].visitCount += 1
+            bookmarks[index].lastVisitTime = Date()
+            bookmarks[index].updatedTime = Date()
+            saveBookmarks()
+        }
+    }
+    
+    func addReadingDuration(_ bookmarkId: String, duration: TimeInterval) {
+        if let index = bookmarks.firstIndex(where: { $0.id == bookmarkId }) {
+            bookmarks[index].readingDuration += duration
+            bookmarks[index].updatedTime = Date()
+            saveBookmarks()
+            logInfo("Added reading duration: \(duration) seconds to bookmark: \(bookmarks[index].name)")
+        }
+    }
+    
+    func addListeningDuration(_ bookmarkId: String, duration: TimeInterval) {
+        if let index = bookmarks.firstIndex(where: { $0.id == bookmarkId }) {
+            bookmarks[index].listeningDuration += duration
+            bookmarks[index].updatedTime = Date()
+            saveBookmarks()
+            logInfo("Added listening duration: \(duration) seconds to bookmark: \(bookmarks[index].name)")
+        }
+    }
+    
+    func setReadingDuration(_ bookmarkId: String, duration: TimeInterval) {
+        if let index = bookmarks.firstIndex(where: { $0.id == bookmarkId }) {
+            bookmarks[index].readingDuration = duration
+            bookmarks[index].updatedTime = Date()
+            saveBookmarks()
+        }
+    }
+    
+    func setListeningDuration(_ bookmarkId: String, duration: TimeInterval) {
+        if let index = bookmarks.firstIndex(where: { $0.id == bookmarkId }) {
+            bookmarks[index].listeningDuration = duration
+            bookmarks[index].updatedTime = Date()
+            saveBookmarks()
+        }
+    }
+    
+    func getBookmarkById(_ id: String) -> Bookmark? {
+        return bookmarks.first { $0.id == id }
+    }
+    
+    func getBookmarksByCategory(_ category: BookmarkCategory) -> [Bookmark] {
+        return bookmarks.filter { $0.category == category }
+    }
+    
+    func getBookmarksByTag(_ tag: String) -> [Bookmark] {
+        return bookmarks.filter { $0.tags.contains(tag) }
+    }
+    
+    func getAllTags() -> [String] {
+        var tags = Set<String>()
+        for bookmark in bookmarks {
+            tags.formUnion(bookmark.tags)
+        }
+        return Array(tags).sorted()
+    }
+    
+    func addTag(_ tag: String, to bookmarkId: String) {
+        if let index = bookmarks.firstIndex(where: { $0.id == bookmarkId }) {
+            if !bookmarks[index].tags.contains(tag) {
+                bookmarks[index].tags.append(tag)
+                bookmarks[index].updatedTime = Date()
+                saveBookmarks()
+            }
+        }
+    }
+    
+    func removeTag(_ tag: String, from bookmarkId: String) {
+        if let index = bookmarks.firstIndex(where: { $0.id == bookmarkId }) {
+            bookmarks[index].tags.removeAll { $0 == tag }
+            bookmarks[index].updatedTime = Date()
+            saveBookmarks()
+        }
+    }
+    
+    func setSortOption(_ option: BookmarkSortOption) {
+        currentSortOption = option
+        saveSortOption()
+    }
+    
+    func setFilter(_ filter: BookmarkFilter) {
+        currentFilter = filter
+    }
+    
+    func resetFilter() {
+        currentFilter = BookmarkFilter()
+    }
+    
+    func duplicateBookmark(_ bookmark: Bookmark) {
+        var newBookmark = bookmark
+        newBookmark.id = UUID().uuidString
+        newBookmark.name = "\(bookmark.name) (副本)"
+        newBookmark.createdTime = Date()
+        newBookmark.updatedTime = Date()
+        newBookmark.visitCount = 0
+        newBookmark.lastVisitTime = nil
+        newBookmark.readingDuration = 0
+        newBookmark.listeningDuration = 0
+        newBookmark.customOrder = bookmarks.count
+        bookmarks.append(newBookmark)
+        saveBookmarks()
+        logInfo("Duplicated bookmark: \(bookmark.name)")
+    }
+    
+    func clearDuration(for bookmarkId: String) {
+        if let index = bookmarks.firstIndex(where: { $0.id == bookmarkId }) {
+            bookmarks[index].readingDuration = 0
+            bookmarks[index].listeningDuration = 0
+            bookmarks[index].updatedTime = Date()
+            saveBookmarks()
+        }
+    }
+    
+    func clearAllDuration() {
+        for index in bookmarks.indices {
+            bookmarks[index].readingDuration = 0
+            bookmarks[index].listeningDuration = 0
+        }
+        saveBookmarks()
+        logInfo("Cleared all reading/listening duration")
+    }
+    
+    func resetVisitStats(for bookmarkId: String) {
+        if let index = bookmarks.firstIndex(where: { $0.id == bookmarkId }) {
+            bookmarks[index].visitCount = 0
+            bookmarks[index].lastVisitTime = nil
+            bookmarks[index].updatedTime = Date()
+            saveBookmarks()
+        }
+    }
+    
+    func exportBookmarks() -> Data? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .prettyPrinted
+        encoder.dateEncodingStrategy = .iso8601
+        
+        let exportData = ExportBookmarkData(
+            bookmarks: bookmarks,
+            folders: folders,
+            exportTime: Date()
+        )
+        
+        return try? encoder.encode(exportData)
+    }
+    
+    func importBookmarks(from data: Data) -> Bool {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        
+        guard let importData = try? decoder.decode(ExportBookmarkData.self, from: data) else {
+            return false
+        }
+        
+        for bookmark in importData.bookmarks {
+            if !bookmarks.contains(where: { $0.id == bookmark.id }) {
+                bookmarks.append(bookmark)
+            }
+        }
+        
+        for folder in importData.folders {
+            if !folders.contains(where: { $0.id == folder.id }) {
+                folders.append(folder)
+            }
+        }
+        
+        saveBookmarks()
+        saveFolders()
         return true
+    }
+    
+    func addFolder(name: String, icon: String = "folder.fill", parentId: String? = nil) {
+        let folder = BookmarkFolder(name: name, icon: icon, parentId: parentId)
+        folders.append(folder)
+        saveFolders()
+        logInfo("Added folder: \(name)")
+    }
+    
+    func deleteFolder(_ folder: BookmarkFolder) {
+        for bookmarkId in folder.bookmarkIds {
+            removeFromAllFolders(bookmarkId)
+        }
+        folders.removeAll { $0.id == folder.id }
+        saveFolders()
+        logInfo("Deleted folder: \(folder.name)")
+    }
+    
+    func updateFolder(_ folder: BookmarkFolder) {
+        if let index = folders.firstIndex(where: { $0.id == folder.id }) {
+            folders[index] = folder
+            folders[index].updatedTime = Date()
+            saveFolders()
+        }
+    }
+    
+    func addBookmarkToFolder(_ bookmarkId: String, folderId: String) {
+        if let folderIndex = folders.firstIndex(where: { $0.id == folderId }) {
+            if !folders[folderIndex].bookmarkIds.contains(bookmarkId) {
+                folders[folderIndex].bookmarkIds.append(bookmarkId)
+                folders[folderIndex].updatedTime = Date()
+                saveFolders()
+            }
+        }
+    }
+    
+    func removeBookmarkFromFolder(_ bookmarkId: String, folderId: String) {
+        if let folderIndex = folders.firstIndex(where: { $0.id == folderId }) {
+            folders[folderIndex].bookmarkIds.removeAll { $0 == bookmarkId }
+            folders[folderIndex].updatedTime = Date()
+            saveFolders()
+        }
+    }
+    
+    func removeFromAllFolders(_ bookmarkId: String) {
+        for index in folders.indices {
+            folders[index].bookmarkIds.removeAll { $0 == bookmarkId }
+        }
+        saveFolders()
+    }
+    
+    func getFoldersForBookmark(_ bookmarkId: String) -> [BookmarkFolder] {
+        return folders.filter { $0.bookmarkIds.contains(bookmarkId) }
+    }
+    
+    func getBookmarksInFolder(_ folderId: String) -> [Bookmark] {
+        guard let folder = folders.first(where: { $0.id == folderId }) else {
+            return []
+        }
+        return folder.bookmarkIds.compactMap { getBookmarkById($0) }
+    }
+    
+    func getTopDurationBookmarks(limit: Int = 10) -> [Bookmark] {
+        return bookmarks
+            .sorted { $0.totalDuration > $1.totalDuration }
+            .prefix(limit)
+            .map { $0 }
+    }
+    
+    func getTopReadingDurationBookmarks(limit: Int = 10) -> [Bookmark] {
+        return bookmarks
+            .sorted { $0.readingDuration > $1.readingDuration }
+            .prefix(limit)
+            .map { $0 }
+    }
+    
+    func getTopListeningDurationBookmarks(limit: Int = 10) -> [Bookmark] {
+        return bookmarks
+            .sorted { $0.listeningDuration > $1.listeningDuration }
+            .prefix(limit)
+            .map { $0 }
+    }
+    
+    func getTotalReadingDuration() -> TimeInterval {
+        return bookmarks.reduce(0) { $0 + $1.readingDuration }
+    }
+    
+    func getTotalListeningDuration() -> TimeInterval {
+        return bookmarks.reduce(0) { $0 + $1.listeningDuration }
+    }
+    
+    func getTotalDuration() -> TimeInterval {
+        return getTotalReadingDuration() + getTotalListeningDuration()
     }
 }
 
-extension BookmarkManager {
-    func getBookmarkStatistics() -> BookmarkStatistics {
-        let totalBookmarks = items.count
-        let booksWithBookmarks = Set(items.map { $0.bookId }).count
-        let chaptersWithBookmarks = Set(items.map { "\($0.bookId)_\($0.chapterId)" }).count
-        
-        let bookmarksWithNotes = items.filter { !$0.note.isEmpty }.count
-        let recentBookmarks = items.filter {
-            Calendar.current.isDate($0.createdTime, inSameDayAs: Date())
-        }.count
-        
-        return BookmarkStatistics(
-            totalBookmarks: totalBookmarks,
-            booksWithBookmarks: booksWithBookmarks,
-            chaptersWithBookmarks: chaptersWithBookmarks,
-            bookmarksWithNotes: bookmarksWithNotes,
-            todayBookmarks: recentBookmarks
-        )
-    }
-    
-    struct BookmarkStatistics {
-        let totalBookmarks: Int
-        let booksWithBookmarks: Int
-        let chaptersWithBookmarks: Int
-        let bookmarksWithNotes: Int
-        let todayBookmarks: Int
-    }
+struct ExportBookmarkData: Codable {
+    let bookmarks: [Bookmark]
+    let folders: [BookmarkFolder]
+    let exportTime: Date
 }
