@@ -4,6 +4,7 @@ struct SettingsView: View {
     @EnvironmentObject var readerSettings: ReaderSettings
     @State private var showingAbout = false
     @State private var showingClearCache = false
+    @StateObject private var syncManager = CloudSyncManager.shared
     
     var body: some View {
         NavigationView {
@@ -28,6 +29,33 @@ struct SettingsView: View {
                     }
                 }
                 
+                // 云同步
+                Section("云同步") {
+                    NavigationLink(destination: CloudSyncView()) {
+                        HStack {
+                            Image(systemName: "icloud.fill")
+                                .foregroundColor(.blue")
+                            Text("iCloud 同步")
+                            Spacer()
+                            if syncManager.isSyncing {
+                                ProgressView()
+                            } else if syncManager.syncStatus == .success {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.green)
+                            }
+                        }
+                    }
+                    
+                    if let lastSync = syncManager.lastSyncTime {
+                        HStack {
+                            Text("上次同步")
+                            Spacer()
+                            Text(lastSync, style: .relative)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                
                 // 书架设置
                 Section("书架设置") {
                     Toggle("自动更新书籍", isOn: .constant(true))
@@ -47,7 +75,7 @@ struct SettingsView: View {
                     HStack {
                         Text("缓存大小")
                         Spacer()
-                        Text("12.5 MB")
+                        Text(DownloadManager.shared.getCacheSize())
                             .foregroundColor(.secondary)
                     }
                     
@@ -60,7 +88,9 @@ struct SettingsView: View {
                 // 数据管理
                 Section("数据管理") {
                     Button("备份数据") {
-                        // 备份数据
+                        if let path = BackupManager.shared.createBackup() {
+                            print("Backup created: \(path)")
+                        }
                     }
                     
                     Button("恢复数据") {
@@ -95,7 +125,9 @@ struct SettingsView: View {
             .alert("清除缓存", isPresented: $showingClearCache) {
                 Button("取消", role: .cancel) {}
                 Button("确定", role: .destructive) {
-                    // 清除缓存
+                    Task {
+                        try? await DownloadManager.shared.clearAllCache()
+                    }
                 }
             } message: {
                 Text("确定要清除所有缓存吗？")
