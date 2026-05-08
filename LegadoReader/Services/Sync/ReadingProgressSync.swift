@@ -213,6 +213,93 @@ class ReadingProgressSync: ObservableObject {
         
         return stats
     }
+    
+    func exportProgress() -> Data? {
+        let allProgress = loadAllProgress()
+        
+        struct ExportData: Codable {
+            let version: Int = 1
+            let exportDate: Date
+            let progress: [ReadingProgress]
+        }
+        
+        let exportData = ExportData(exportDate: Date(), progress: allProgress)
+        
+        return try? JSONEncoder().encode(exportData)
+    }
+    
+    func importProgress(from data: Data, overwrite: Bool = false) throws -> Int {
+        struct ImportData: Codable {
+            let version: Int
+            let exportDate: Date
+            let progress: [ReadingProgress]
+        }
+        
+        guard let importData = try? JSONDecoder().decode(ImportData.self, from: data) else {
+            throw ProgressSyncError.invalidFormat
+        }
+        
+        var allProgress = overwrite ? [] : loadAllProgress()
+        
+        for importedProgress in importData.progress {
+            if let index = allProgress.firstIndex(where: { $0.bookId == importedProgress.bookId }) {
+                if overwrite {
+                    allProgress[index] = importedProgress
+                } else if importedProgress.lastReadTime > allProgress[index].lastReadTime {
+                    allProgress[index] = importedProgress
+                }
+            } else {
+                allProgress.append(importedProgress)
+            }
+        }
+        
+        saveAllProgress(allProgress)
+        syncToiCloud(progress: allProgress)
+        
+        return importData.progress.count
+    }
+    
+    func exportProgressToFile(url: URL) throws {
+        guard let data = exportProgress() else {
+            throw ProgressSyncError.exportFailed
+        }
+        
+        _ = url.startAccessingSecurityScopedResource()
+        defer { url.stopAccessingSecurityScopedResource() }
+        
+        try data.write(to: url)
+    }
+    
+    func importProgressFromFile(url: URL, overwrite: Bool = false) throws -> Int {
+        _ = url.startAccessingSecurityScopedResource()
+        defer { url.stopAccessingSecurityScopedResource() }
+        
+        guard let data = try? Data(contentsOf: url) else {
+            throw ProgressSyncError.importFailed
+        }
+        
+        return try importProgress(from: data, overwrite: overwrite)
+    }
+    
+    func mergeProgress(from data: Data) throws -> Int {
+        return try importProgress(from: data, overwrite: false)
+    }
+}
+
+enum ProgressSyncError: Error, LocalizedError {
+    case invalidFormat
+    case exportFailed
+    case importFailed
+    case mergeConflict
+    
+    var errorDescription: String? {
+        switch self {
+        case .invalidFormat: return "无效的进度文件格式"
+        case .exportFailed: return "导出进度失败"
+        case .importFailed: return "导入进度失败"
+        case .mergeConflict: return "合并进度时发生冲突"
+        }
+    }
 }
 
 struct ReadingStats {

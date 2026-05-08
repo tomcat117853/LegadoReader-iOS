@@ -125,6 +125,16 @@ class BookFormatManager: ObservableObject {
                 isBinary: false
             ),
             BookFormat(
+                id: "docx",
+                name: "Word文档",
+                extensions: ["docx"],
+                mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                description: "Microsoft Word 2007+ 文档格式",
+                supportsMetadata: true,
+                supportsImages: true,
+                isBinary: true
+            ),
+            BookFormat(
                 id: "zip",
                 name: "ZIP压缩",
                 extensions: ["zip"],
@@ -326,6 +336,8 @@ class BookFormatManager: ObservableObject {
             return RTFReader()
         case "html":
             return HTMLReader()
+        case "docx":
+            return DOCXReader()
         case "7z", "tar", "targz", "tarbz2", "tarxz", "xz":
             return BookArchiveReader()
         default:

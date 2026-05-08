@@ -565,3 +565,182 @@ class AzureTokenManager {
         }.resume()
     }
 }
+
+class AudioTemplateManager: ObservableObject {
+    static let shared = AudioTemplateManager()
+    
+    @Published var templates: [AudioTemplate] = []
+    @Published var currentTemplate: AudioTemplate?
+    
+    private let templatesKey = "AudioTemplate_templates"
+    
+    struct AudioTemplate: Identifiable, Codable {
+        let id: String
+        var name: String
+        var templateContent: String
+        var parameters: [TemplateParameter]
+        var createdAt: Date
+        var lastUsedAt: Date?
+        
+        init(name: String, templateContent: String, parameters: [TemplateParameter] = []) {
+            self.id = UUID().uuidString
+            self.name = name
+            self.templateContent = templateContent
+            self.parameters = parameters
+            self.createdAt = Date()
+            self.lastUsedAt = nil
+        }
+        
+        static let defaultTemplate = AudioTemplate(
+            name: "默认模板",
+            templateContent: """
+            {{书名}}，
+            作者：{{作者}}。
+            {{内容}}
+            """,
+            parameters: [
+                TemplateParameter(name: "书名", key: "bookName", defaultValue: ""),
+                TemplateParameter(name: "作者", key: "author", defaultValue: ""),
+                TemplateParameter(name: "内容", key: "content", defaultValue: "")
+            ]
+        )
+    }
+    
+    struct TemplateParameter: Identifiable, Codable {
+        let id: String
+        var name: String
+        var key: String
+        var defaultValue: String
+        var currentValue: String
+        var isRequired: Bool
+        var type: ParameterType
+        
+        enum ParameterType: String, Codable, CaseIterable {
+            case text = "text"
+            case number = "number"
+            case select = "select"
+            case voice = "voice"
+            
+            var displayName: String {
+                switch self {
+                case .text: return "文本"
+                case .number: return "数字"
+                case .select: return "选择"
+                case .voice: return "语音"
+                }
+            }
+        }
+        
+        init(name: String, key: String, defaultValue: String, currentValue: String = "", isRequired: Bool = false, type: ParameterType = .text) {
+            self.id = UUID().uuidString
+            self.name = name
+            self.key = key
+            self.defaultValue = defaultValue
+            self.currentValue = currentValue.isEmpty ? defaultValue : currentValue
+            self.isRequired = isRequired
+            self.type = type
+        }
+    }
+    
+    private init() {
+        loadTemplates()
+        if templates.isEmpty {
+            templates.append(AudioTemplate.defaultTemplate)
+            saveTemplates()
+        }
+    }
+    
+    private func loadTemplates() {
+        if let data = UserDefaults.standard.data(forKey: templatesKey),
+           let savedTemplates = try? JSONDecoder().decode([AudioTemplate].self, from: data) {
+            templates = savedTemplates
+        }
+    }
+    
+    private func saveTemplates() {
+        if let data = try? JSONEncoder().encode(templates) {
+            UserDefaults.standard.set(data, forKey: templatesKey)
+        }
+    }
+    
+    func addTemplate(_ template: AudioTemplate) {
+        templates.append(template)
+        saveTemplates()
+    }
+    
+    func updateTemplate(_ template: AudioTemplate) {
+        if let index = templates.firstIndex(where: { $0.id == template.id }) {
+            templates[index] = template
+            saveTemplates()
+        }
+    }
+    
+    func deleteTemplate(_ template: AudioTemplate) {
+        templates.removeAll { $0.id == template.id }
+        saveTemplates()
+    }
+    
+    func applyTemplate(_ template: AudioTemplate, with values: [String: String]) -> String {
+        var result = template.templateContent
+        
+        for (key, value) in values {
+            result = result.replacingOccurrences(of: "{{\(key)}}", with: value)
+        }
+        
+        let pattern = #"\{\{[^}]+\}\}"#
+        if let regex = try? NSRegularExpression(pattern: pattern) {
+            result = regex.stringByReplacingMatches(in: result, range: NSRange(result.startIndex..., in: result), withTemplate: "")
+        }
+        
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
+    func renderTemplate(_ template: AudioTemplate, bookName: String, author: String, chapterTitle: String, content: String) -> String {
+        var values: [String: String] = [
+            "bookName": bookName,
+            "author": author,
+            "chapterTitle": chapterTitle,
+            "content": content,
+            "date": DateFormatter.localizedString(from: Date(), dateStyle: .long, timeStyle: .none)
+        ]
+        
+        for param in template.parameters {
+            if values[param.key] == nil {
+                values[param.key] = param.currentValue
+            }
+        }
+        
+        return applyTemplate(template, with: values)
+    }
+    
+    func createTemplateFromContent(_ name: String, content: String) -> AudioTemplate {
+        var parameters: [TemplateParameter] = []
+        
+        let pattern = #"\{\{([^}:]+)(?::([^}]+))?\}\}"#
+        if let regex = try? NSRegularExpression(pattern: pattern) {
+            let matches = regex.matches(in: content, range: NSRange(content.startIndex..., in: content))
+            
+            var seenKeys = Set<String>()
+            
+            for match in matches {
+                if let keyRange = Range(match.range(at: 1), in: content) {
+                    let key = String(content[keyRange])
+                    
+                    if !seenKeys.contains(key) {
+                        seenKeys.insert(key)
+                        
+                        var defaultValue = ""
+                        if match.numberOfRanges > 2,
+                           let defaultRange = Range(match.range(at: 2), in: content) {
+                            defaultValue = String(content[defaultRange])
+                        }
+                        
+                        parameters.append(TemplateParameter(name: key, key: key, defaultValue: defaultValue))
+                    }
+                }
+            }
+        }
+        
+        return AudioTemplate(name: name, templateContent: content, parameters: parameters)
+    }
+}
