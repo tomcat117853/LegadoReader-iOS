@@ -216,17 +216,6 @@ struct EyeCareSettingsView: View {
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(Color.gray.opacity(0.3), lineWidth: 1)
             )
-            
-            if eyeCareManager.overlayOpacity > 0 {
-                HStack {
-                    Circle()
-                        .fill(eyeCareManager.overlayColor.opacity(0.5))
-                        .frame(width: 20, height: 20)
-                    Text("滤光层: \(Int(eyeCareManager.overlayOpacity * 100))% 透明度")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
         }
         .padding(.vertical, 4)
     }
