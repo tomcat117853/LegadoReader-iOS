@@ -365,6 +365,15 @@ struct LazyBookReaderView: View {
     @State private var showingAnnotationPopup = false
     @State private var selectedAnnotation: AnnotationService.Annotation?
     
+    private var isEPUB: Bool {
+        book.bookType == .epub
+    }
+    
+    private var epubBaseURL: URL? {
+        guard isEPUB, let lazyBook = book as? LazyEPUBBook else { return nil }
+        return lazyBook.baseURL
+    }
+    
     var body: some View {
         ZStack {
             backgroundColor
@@ -457,14 +466,13 @@ struct LazyBookReaderView: View {
         GeometryReader { geometry in
             ZStack {
                 VStack(spacing: 0) {
-                    ScrollView {
-                        LazySelectableTextView(
-                            chapterTitle: chapter.title,
-                            content: chapter.content,
+                    if isEPUB {
+                        EPUBCSSContentView(
+                            chapter: chapter,
+                            baseURL: epubBaseURL,
                             fontSize: readerSettings.fontSize,
                             fontFamily: readerSettings.fontFamily,
-                            lineSpacing: readerSettings.lineSpacing,
-                            horizontalPadding: readerSettings.horizontalPadding,
+                            backgroundColor: backgroundColor,
                             textColor: textColor,
                             annotations: getCurrentAnnotations(),
                             onTextSelected: { text, range in
@@ -473,6 +481,24 @@ struct LazyBookReaderView: View {
                                 showingAnnotationMenu = true
                             }
                         )
+                    } else {
+                        ScrollView {
+                            LazySelectableTextView(
+                                chapterTitle: chapter.title,
+                                content: chapter.content,
+                                fontSize: readerSettings.fontSize,
+                                fontFamily: readerSettings.fontFamily,
+                                lineSpacing: readerSettings.lineSpacing,
+                                horizontalPadding: readerSettings.horizontalPadding,
+                                textColor: textColor,
+                                annotations: getCurrentAnnotations(),
+                                onTextSelected: { text, range in
+                                    selectedText = text
+                                    selectedRange = range
+                                    showingAnnotationMenu = true
+                                }
+                            )
+                        }
                     }
                     
                     chapterNavigation
