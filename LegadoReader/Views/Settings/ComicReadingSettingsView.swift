@@ -88,6 +88,35 @@ struct ComicReadingSettingsView: View {
             Section("其他") {
                 Toggle("保持屏幕常亮", isOn: $settings.keepScreenOn)
                     .onChange(of: settings.keepScreenOn) { _ in settings.saveSettings() }
+                
+                Toggle("状态栏常显", isOn: $settings.alwaysShowStatusBar)
+                    .onChange(of: settings.alwaysShowStatusBar) { _ in settings.saveSettings() }
+                
+                Toggle("隐藏电池百分比", isOn: $settings.hideBatteryPercentage)
+                    .onChange(of: settings.hideBatteryPercentage) { _ in settings.saveSettings() }
+            }
+            
+            Section("画质设置") {
+                Picker("图片画质", selection: $settings.imageQuality) {
+                    ForEach(ComicReadingSettings.ImageQuality.allCases, id: \.self) { quality in
+                        HStack {
+                            Image(systemName: quality.icon)
+                            Text(quality.displayName)
+                        }
+                        .tag(quality)
+                    }
+                }
+                .pickerStyle(.menu)
+                .onChange(of: settings.imageQuality) { _ in settings.saveSettings() }
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("当前画质: \(settings.imageQuality.displayName)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text(settings.imageQualityDescription)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
             }
             
             Section("支持的格式") {

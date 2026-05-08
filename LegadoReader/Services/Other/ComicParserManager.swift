@@ -429,6 +429,22 @@ class ComicReadingSettings: BaseService, ObservableObject {
     @Published var magnifierSize: MagnifierSize = .medium
     @Published var keepScreenOn: Bool = true
     @Published var autoPlaySpeed: Double = 5.0
+    @Published var imageQuality: ImageQuality = .high
+    @Published var alwaysShowStatusBar: Bool = false
+    @Published var hideBatteryPercentage: Bool = false
+    
+    var imageQualityDescription: String {
+        switch imageQuality {
+        case .original:
+            return "使用原始图片画质，最清晰，占用最多存储空间"
+        case .high:
+            return "高质量图片，最大边限制3000像素，推荐收藏使用"
+        case .medium:
+            return "中等画质，最大边限制2000像素，平衡画质与空间"
+        case .low:
+            return "省流量模式，最大边限制1200像素，适合移动网络"
+        }
+    }
     
     enum ReadingMode: String, CaseIterable, Codable {
         case rightToLeft = "rightToLeft"
@@ -502,6 +518,49 @@ class ComicReadingSettings: BaseService, ObservableObject {
         }
     }
     
+    enum ImageQuality: String, CaseIterable, Codable {
+        case original = "original"
+        case high = "high"
+        case medium = "medium"
+        case low = "low"
+        
+        var displayName: String {
+            switch self {
+            case .original: return "原图"
+            case .high: return "高质量"
+            case .medium: return "中等"
+            case .low: return "省流量"
+            }
+        }
+        
+        var compressionQuality: CGFloat {
+            switch self {
+            case .original: return 1.0
+            case .high: return 0.9
+            case .medium: return 0.7
+            case .low: return 0.5
+            }
+        }
+        
+        var maxDimension: CGFloat? {
+            switch self {
+            case .original: return nil
+            case .high: return 3000
+            case .medium: return 2000
+            case .low: return 1200
+            }
+        }
+        
+        var icon: String {
+            switch self {
+            case .original: return "photo.stack"
+            case .high: return "photo"
+            case .medium: return "photo.fill"
+            case .low: return "photo.badge.ellipsis"
+            }
+        }
+    }
+    
     private let settingsKey = "ComicReadingSettings"
     
     private override init() {
@@ -521,6 +580,9 @@ class ComicReadingSettings: BaseService, ObservableObject {
             magnifierEnabled = saved.magnifierEnabled
             magnifierSize = saved.magnifierSize
             keepScreenOn = saved.keepScreenOn
+            imageQuality = saved.imageQuality
+            alwaysShowStatusBar = saved.alwaysShowStatusBar
+            hideBatteryPercentage = saved.hideBatteryPercentage
         }
     }
     
@@ -535,7 +597,10 @@ class ComicReadingSettings: BaseService, ObservableObject {
             pinchToZoom: pinchToZoom,
             magnifierEnabled: magnifierEnabled,
             magnifierSize: magnifierSize,
-            keepScreenOn: keepScreenOn
+            keepScreenOn: keepScreenOn,
+            imageQuality: imageQuality,
+            alwaysShowStatusBar: alwaysShowStatusBar,
+            hideBatteryPercentage: hideBatteryPercentage
         )
         saveCodable(data, key: settingsKey)
     }
@@ -551,5 +616,8 @@ class ComicReadingSettings: BaseService, ObservableObject {
         var magnifierEnabled: Bool
         var magnifierSize: MagnifierSize
         var keepScreenOn: Bool
+        var imageQuality: ImageQuality
+        var alwaysShowStatusBar: Bool
+        var hideBatteryPercentage: Bool
     }
 }

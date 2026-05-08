@@ -14,6 +14,8 @@ struct ComicReaderView: View {
     @State private var lastOffset: CGSize = .zero
     @State private var magnifierPosition: CGPoint?
     @State private var showingMagnifier = false
+    @State private var showStatusBar = false
+    @State private var batteryLevel: Float = 0.0
     
     let comicBook: ComicParserManager.ComicBook
     
@@ -32,20 +34,113 @@ struct ComicReaderView: View {
             
             BrightnessIndicatorOverlay()
             
+            if showStatusBar || settings.alwaysShowStatusBar {
+                customStatusBar
+            }
+            
             if showingPageSlider || settings.showPageSlider {
                 pageSliderOverlay
             }
         }
         .navigationBarHidden(true)
-        .statusBar(hidden: true)
+        .statusBar(hidden: !settings.alwaysShowStatusBar)
         .sheet(isPresented: $showingSettings) {
             ComicSettingsView()
         }
         .onAppear {
             loadComic()
+            setupBatteryMonitor()
         }
         .onDisappear {
             comicManager.closeComic()
+        }
+    }
+    
+    private var customStatusBar: some View {
+        VStack {
+            HStack {
+                Spacer()
+                
+                HStack(spacing: 16) {
+                    if settings.alwaysShowStatusBar && !settings.hideBatteryPercentage {
+                        batteryIndicator
+                    }
+                    
+                    timeIndicator
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule()
+                        .fill(Color.black.opacity(0.5))
+                )
+            }
+            .padding(.top, 8)
+            .padding(.horizontal, 16)
+            
+            Spacer()
+        }
+        .transition(.opacity)
+    }
+    
+    private var batteryIndicator: some View {
+        HStack(spacing: 4) {
+            Image(systemName: batteryIcon)
+                .font(.system(size: 14))
+                .foregroundColor(.white)
+            
+            if !settings.hideBatteryPercentage {
+                Text("\(Int(batteryLevel * 100))%")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white)
+            }
+        }
+    }
+    
+    private var batteryIcon: String {
+        UIDevice.current.isBatteryMonitoringEnabled = true
+        let batteryLevel = UIDevice.current.batteryLevel
+        let batteryState = UIDevice.current.batteryState
+        
+        if batteryState == .charging {
+            return "battery.100.bolt"
+        } else if batteryLevel > 0.75 {
+            return "battery.100"
+        } else if batteryLevel > 0.5 {
+            return "battery.75"
+        } else if batteryLevel > 0.25 {
+            return "battery.50"
+        } else {
+            return "battery.25"
+        }
+    }
+    
+    private var timeIndicator: some View {
+        Text(currentTimeString)
+            .font(.system(size: 12, weight: .medium))
+            .foregroundColor(.white)
+            .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
+            let formatter = DateFormatter()
+            formatter.dateFormat = "HH:mm"
+        }
+    }
+    
+    private var currentTimeString: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: Date())
+    }
+    
+    private func setupBatteryMonitor() {
+        UIDevice.current.isBatteryMonitoringEnabled = true
+        batteryLevel = UIDevice.current.batteryLevel
+        
+        NotificationCenter.default.addObserver(
+            forName: UIDevice.batteryLevelDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            batteryLevel = UIDevice.current.batteryLevel
         }
     }
     

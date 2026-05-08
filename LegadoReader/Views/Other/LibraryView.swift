@@ -77,7 +77,7 @@ struct LibraryView: View {
             }
         }
         .sheet(isPresented: $showingImport) {
-            EmptyView()
+            FileImportView()
         }
         .sheet(isPresented: $showingSourceImport) {
             importSourceSheet
