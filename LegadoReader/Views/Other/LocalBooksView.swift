@@ -13,12 +13,14 @@ struct LocalBooksView: View {
     @State private var showingLockedGroup: BookGroup?
     @State private var showingSearch = false
     @State private var searchText = ""
+    @State private var showingFilterSheet = false
+    @State private var currentFilter: BookFilter = BookFilter()
     
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
-                if showingSearch {
-                    searchBar
+                if showingSearch || currentFilter.hasActiveFilters {
+                    filterBar
                 }
                 
                 groupListView
@@ -27,8 +29,23 @@ struct LocalBooksView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: { showingSearch.toggle() }) {
-                        Image(systemName: showingSearch ? "xmark" : "magnifyingglass")
+                    Menu {
+                        Button(action: { showingSearch.toggle() }) {
+                            Label(showingSearch ? "关闭搜索" : "搜索书籍", systemImage: "magnifyingglass")
+                        }
+                        
+                        Button(action: { showingFilterSheet = true }) {
+                            Label("筛选与排序", systemImage: "line.3.horizontal.decrease.circle")
+                        }
+                        
+                        if currentFilter.hasActiveFilters {
+                            Divider()
+                            Button(role: .destructive, action: { currentFilter = BookFilter() }) {
+                                Label("清除筛选", systemImage: "xmark.circle")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: currentFilter.hasActiveFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
                     }
                 }
                 
@@ -55,13 +72,13 @@ struct LocalBooksView: View {
             .sheet(isPresented: $showingNewGroupSheet) {
                 NewGroupSheet()
             }
-            .sheet(item: $showingGroupDetail) { group in
-                GroupDetailView(group: group)
+            .sheet(isPresented: $showingGroupDetail) {
+                GroupDetailView(group: $showingGroupDetail.wrappedValue!)
             }
-            .sheet(item: $showingLockedGroup) { group in
-                LockUnlockView(groupId: group.id, onSuccess: {
+            .sheet(isPresented: $showingLockedGroup) {
+                LockUnlockView(groupId: $showingLockedGroup.wrappedValue!.id, onSuccess: {
                     showingLockedGroup = nil
-                    selectedGroup = group
+                    selectedGroup = $showingLockedGroup.wrappedValue
                 }, onCancel: {
                     showingLockedGroup = nil
                 })
@@ -69,6 +86,79 @@ struct LocalBooksView: View {
             .sheet(item: $selectedBook) { book in
                 EnhancedBookDetailView(book: book)
             }
+            .sheet(isPresented: $showingFilterSheet) {
+                BookFilterSheet(filter: $currentFilter)
+            }
+        }
+    }
+    
+    private var filterBar: some View {
+        VStack(spacing: 8) {
+            if showingSearch {
+                searchBar
+            }
+            
+            if currentFilter.hasActiveFilters {
+                activeFiltersView
+            }
+        }
+        .padding(.horizontal)
+        .padding(.top, 8)
+        .background(Color(.systemBackground))
+    }
+    
+    private var activeFiltersView: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                if currentFilter.hasFormatFilter {
+                    FilterChip(title: "格式: \(currentFilter.selectedFormats.map { $0.uppercased() }.joined(separator: ", "))") {
+                        currentFilter.selectedFormats.removeAll()
+                    }
+                }
+                
+                if currentFilter.hasStatusFilter {
+                    FilterChip(title: "状态: \(formatFilterStatus(currentFilter.readStatus))") {
+                        currentFilter.readStatus = nil
+                    }
+                }
+                
+                if currentFilter.hasProgressFilter {
+                    FilterChip(title: "进度: \(formatProgressFilter(currentFilter.progressRange))") {
+                        currentFilter.progressRange = nil
+                    }
+                }
+                
+                if currentFilter.hasSortFilter {
+                    FilterChip(title: "排序: \(formatSortOption(currentFilter.sortOption))") {
+                        currentFilter.sortOption = .name
+                    }
+                }
+            }
+        }
+    }
+    
+    private func formatFilterStatus(_ status: BookFilter.ReadStatus?) -> String {
+        guard let status = status else { return "" }
+        switch status {
+        case .unread: return "未读"
+        case .reading: return "在读"
+        case .completed: return "已读完"
+        }
+    }
+    
+    private func formatProgressFilter(_ range: ClosedRange<Double>?) -> String {
+        guard let range = range else { return "" }
+        return "\(Int(range.lowerBound * 100))%-\(Int(range.upperBound * 100))%"
+    }
+    
+    private func formatSortOption(_ option: BookFilter.SortOption) -> String {
+        switch option {
+        case .name: return "名称"
+        case .author: return "作者"
+        case .recentlyRead: return "最近阅读"
+        case .recentlyAdded: return "最近添加"
+        case .progress: return "阅读进度"
+        case .size: return "文件大小"
         }
     }
     
@@ -90,7 +180,6 @@ struct LocalBooksView: View {
         .padding(10)
         .background(Color(.systemGray6))
         .cornerRadius(10)
-        .padding()
     }
     
     private var groupListView: some View {
@@ -160,6 +249,224 @@ struct LocalBooksView: View {
     
     private func handleDeleteGroup(_ group: BookGroup) {
         groupManager.deleteGroup(group)
+    }
+}
+
+struct FilterChip: View {
+    let title: String
+    let onRemove: () -> Void
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(title)
+                .font(.caption)
+            
+            Button(action: onRemove) {
+                Image(systemName: "xmark")
+                    .font(.caption2)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Color.accentColor.opacity(0.2))
+        .foregroundColor(.accentColor)
+        .cornerRadius(16)
+    }
+}
+
+struct BookFilter {
+    enum ReadStatus: String, CaseIterable {
+        case unread = "未读"
+        case reading = "在读"
+        case completed = "已读完"
+    }
+    
+    enum SortOption: String, CaseIterable {
+        case name = "名称"
+        case author = "作者"
+        case recentlyRead = "最近阅读"
+        case recentlyAdded = "最近添加"
+        case progress = "阅读进度"
+        case size = "文件大小"
+    }
+    
+    var selectedFormats: [String] = []
+    var readStatus: ReadStatus?
+    var progressRange: ClosedRange<Double>?
+    var sortOption: SortOption = .name
+    var sortAscending: Bool = true
+    
+    var hasActiveFilters: Bool {
+        return hasFormatFilter || hasStatusFilter || hasProgressFilter || hasSortFilter
+    }
+    
+    var hasFormatFilter: Bool {
+        return !selectedFormats.isEmpty
+    }
+    
+    var hasStatusFilter: Bool {
+        return readStatus != nil
+    }
+    
+    var hasProgressFilter: Bool {
+        return progressRange != nil
+    }
+    
+    var hasSortFilter: Bool {
+        return sortOption != .name || !sortAscending
+    }
+    
+    func matches(book: Book, progress: ReadingProgress?) -> Bool {
+        if hasFormatFilter && !selectedFormats.contains(book.format.lowercased()) {
+            return false
+        }
+        
+        if hasStatusFilter {
+            let progressValue = progress?.progress ?? 0
+            switch readStatus {
+            case .unread:
+                if progressValue > 0 { return false }
+            case .reading:
+                if progressValue == 0 || progressValue >= 0.95 { return false }
+            case .completed:
+                if progressValue < 0.95 { return false }
+            case .none:
+                break
+            }
+        }
+        
+        if hasProgressFilter, let range = progressRange {
+            let progressValue = progress?.progress ?? 0
+            if !range.contains(progressValue) { return false }
+        }
+        
+        return true
+    }
+    
+    func sort(_ books: [Book], by progressMap: [String: ReadingProgress]) -> [Book] {
+        return books.sorted { book1, book2 in
+            let progress1 = progressMap[book1.id]
+            let progress2 = progressMap[book2.id]
+            
+            let result: Bool
+            switch sortOption {
+            case .name:
+                result = book1.name < book2.name
+            case .author:
+                result = book1.author < book2.author
+            case .recentlyRead:
+                result = (progress1?.lastReadTime ?? .distantPast) > (progress2?.lastReadTime ?? .distantPast)
+            case .recentlyAdded:
+                result = book1.addedAt > book2.addedAt
+            case .progress:
+                result = (progress1?.progress ?? 0) > (progress2?.progress ?? 0)
+            case .size:
+                result = book1.fileSize > book2.fileSize
+            }
+            
+            return sortAscending ? result : !result
+        }
+    }
+}
+
+struct BookFilterSheet: View {
+    @Binding var filter: BookFilter
+    @Environment(\.dismiss) private var dismiss
+    
+    let allFormats = ["txt", "epub", "pdf", "mobi", "azw", "fb2", "chm", "rtf", "html", "docx", "zip", "7z", "tar", "xz"]
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                Section("按格式筛选") {
+                    ForEach(allFormats, id: \.self) { format in
+                        HStack {
+                            Text(format.uppercased())
+                            Spacer()
+                            if filter.selectedFormats.contains(format) {
+                                Image(systemName: "checkmark")
+                                    .foregroundColor(.accentColor)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            if filter.selectedFormats.contains(format) {
+                                filter.selectedFormats.removeAll { $0 == format }
+                            } else {
+                                filter.selectedFormats.append(format)
+                            }
+                        }
+                    }
+                }
+                
+                Section("按阅读状态筛选") {
+                    ForEach(BookFilter.ReadStatus.allCases, id: \.self) { status in
+                        HStack {
+                            Text(status.rawValue)
+                            Spacer()
+                            if filter.readStatus == status {
+                                Image(systemName: "checkmark")
+                                    .foregroundColor(.accentColor)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            if filter.readStatus == status {
+                                filter.readStatus = nil
+                            } else {
+                                filter.readStatus = status
+                            }
+                        }
+                    }
+                    
+                    if filter.readStatus != nil {
+                        Button("清除状态筛选") {
+                            filter.readStatus = nil
+                        }
+                        .foregroundColor(.red)
+                    }
+                }
+                
+                Section("按阅读进度筛选") {
+                    Picker("进度范围", selection: Binding(
+                        get: { filter.progressRange ?? 0...1 },
+                        set: { filter.progressRange = $0 }
+                    )) {
+                        Text("全部").tag(0.0...1.0)
+                        Text("0-25%").tag(0.0...0.25)
+                        Text("25-50%").tag(0.25...0.5)
+                        Text("50-75%").tag(0.5...0.75)
+                        Text("75-100%").tag(0.75...1.0)
+                    }
+                    .pickerStyle(.menu)
+                }
+                
+                Section("排序方式") {
+                    Picker("排序", selection: $filter.sortOption) {
+                        ForEach(BookFilter.SortOption.allCases, id: \.self) { option in
+                            Text(option.rawValue).tag(option)
+                        }
+                    }
+                    
+                    Toggle("升序", isOn: $filter.sortAscending)
+                }
+            }
+            .navigationTitle("筛选与排序")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("重置") {
+                        filter = BookFilter()
+                    }
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("完成") {
+                        dismiss()
+                    }
+                }
+            }
+        }
     }
 }
 

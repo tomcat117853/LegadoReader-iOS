@@ -61,6 +61,19 @@ struct SettingsView: View {
                         }
                     }
                     
+                    NavigationLink(destination: ImageGroupComicView()) {
+                        HStack {
+                            Image(systemName: "photo.on.rectangle.angled")
+                                .foregroundColor(.purple)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("图片组漫画")
+                                Text("导入照片或文件夹作为漫画阅读")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    
                     Toggle("夜间模式跟随系统", isOn: .constant(false))
                     
                     Toggle("自动翻页", isOn: $readerSettings.isAutoReading)
