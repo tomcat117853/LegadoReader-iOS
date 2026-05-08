@@ -76,6 +76,9 @@ struct BookshelfView: View {
     @State private var bookToGroup: Book?
     @State private var showingBookDetail = false
     @State private var bookForDetail: Book?
+    @State private var showingBatchEdit = false
+    @State private var showingReadingHistory = false
+    @State private var selectedBooks: [Book] = []
     
     enum BookSortOption: String, CaseIterable, Identifiable {
         case namePinyin = "按书名拼音"
@@ -270,6 +273,9 @@ struct BookshelfView: View {
                     }
                 }
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
+                    Button(action: { showingReadingHistory = true }) {
+                        Image(systemName: "clock")
+                    }
                     Button(action: { showingBrowser = true }) {
                         Image(systemName: "globe")
                     }
@@ -287,6 +293,9 @@ struct BookshelfView: View {
                                     .offset(x: 8, y: -8)
                             }
                         }
+                    }
+                    Button(action: { showingBatchEdit = true }) {
+                        Image(systemName: "square.and.pencil")
                     }
                 }
             }
@@ -315,6 +324,13 @@ struct BookshelfView: View {
                 if let book = bookForDetail {
                     BookDetailView(book: book)
                 }
+            }
+            .sheet(isPresented: $showingReadingHistory) {
+                ReadingHistoryView()
+            }
+            .sheet(isPresented: $showingBatchEdit) {
+                BookshelfBatchEditView(selectedBooks: $selectedBooks)
+                    .environmentObject(bookStore)
             }
         }
     }

@@ -30,6 +30,8 @@ struct UniversalReaderView: View {
     @State private var showingAutoScroll = false
     @State private var showingStatistics = false
     @State private var autoScrollManager = AutoScrollManager()
+    @State private var readingStartTime = Date()
+    @State private var readingDuration: TimeInterval = 0
     
     @State private var showingAnnotationMenu = false
     @State private var selectedText = ""
@@ -196,9 +198,11 @@ struct UniversalReaderView: View {
         }
         .task {
             await loadInitialData()
+            readingStartTime = Date()
         }
         .onDisappear {
             saveProgress()
+            saveReadingHistory()
             autoScrollManager.stop()
         }
     }
@@ -452,6 +456,29 @@ struct UniversalReaderView: View {
         annotationService.removeAnnotation(annotation)
         showingAnnotationPopup = false
         selectedAnnotation = nil
+    }
+    
+    private func saveReadingHistory() {
+        readingDuration = Date().timeIntervalSince(readingStartTime)
+        
+        if readingDuration < 60 {
+            return
+        }
+        
+        if let book = readerMode.book {
+            let record = ReadingRecord(book: book, duration: readingDuration)
+            ReadingHistoryManager.shared.saveRecord(record)
+        } else if let lazyBook = readerMode.lazyBook {
+            let book = Book()
+            book.id = currentBookId
+            book.name = lazyBook.bookTitle
+            book.cover = lazyBook.cover
+            book.lastReadChapter = currentChapterTitle
+            book.progress = Double(currentChapterIndex) / Double(lazyBook.chaptersCount)
+            
+            let record = ReadingRecord(book: book, duration: readingDuration)
+            ReadingHistoryManager.shared.saveRecord(record)
+        }
     }
 }
 
