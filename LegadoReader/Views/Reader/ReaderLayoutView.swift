@@ -8,7 +8,7 @@ struct ReaderLayoutView: View {
     @State private var fontSize: Double = 18
     @State private var showLayoutManager = false
     
-    private let layoutTypes = ["自定义", "常规", "紧凑型", "中号型", "宽松型"]
+    private let layoutTypes = ["自定义", "管理", "初号", "小初", "一号", "一号宽", "小一", "二号", "小二", "三号", "小三"]
     
     private let colorSchemes = [
         Color(hex: "E8F5E9")!, // 护眼绿
@@ -23,11 +23,17 @@ struct ReaderLayoutView: View {
             VStack(spacing: 16) {
                 HStack(spacing: 8) {
                     ForEach(layoutTypes, id: \.self) { layout in
-                        Button(action: { selectedLayout = layout }) {
+                        Button(action: {
+                            if layout == "管理" {
+                                showLayoutManager = true
+                            } else {
+                                selectedLayout = layout
+                            }
+                        }) {
                             Text(layout)
                                 .font(.subheadline)
                                 .foregroundColor(selectedLayout == layout ? .white : .primary)
-                                .padding(.horizontal, 16)
+                                .padding(.horizontal, 12)
                                 .padding(.vertical, 8)
                                 .background(selectedLayout == layout ? Color.red : Color(.systemGray5))
                                 .cornerRadius(8)
@@ -81,16 +87,6 @@ struct ReaderLayoutView: View {
                     
                     Button(action: {}) {
                         Text("配色")
-                            .font(.subheadline)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 12)
-                            .background(Color(hex: "1B5E20")!)
-                            .cornerRadius(20)
-                    }
-                    
-                    Button(action: { showLayoutManager = true }) {
-                        Text("管理")
                             .font(.subheadline)
                             .foregroundColor(.white)
                             .padding(.horizontal, 24)
