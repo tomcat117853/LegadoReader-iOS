@@ -59,7 +59,7 @@ struct BookshelfView: View {
                         .animation(.spring(), value: showingSidebar)
                 }
             }
-            .navigationTitle("爱阅记")
+            .navigationTitle("阅读")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
