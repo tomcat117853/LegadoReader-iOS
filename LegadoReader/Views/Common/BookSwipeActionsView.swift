@@ -174,7 +174,6 @@ struct GridBookshelfView: View {
     @Binding var bookForDetail: Book?
     @Binding var isEditMode: Bool
     @Binding var selectedBooks: [Book]
-    @Binding var bookToRead: Book?
     @EnvironmentObject var bookStore: BookStore
     
     let columns = [
@@ -192,7 +191,7 @@ struct GridBookshelfView: View {
                             book: book,
                             onTap: {
                                 if isEditMode {
-                                    bookToRead = book
+                                    toggleSelection(book)
                                 } else {
                                     selectedBook = book
                                 }
@@ -226,7 +225,9 @@ struct GridBookshelfView: View {
                     .onLongPressGesture(minimumDuration: 0.5) {
                         withAnimation {
                             isEditMode = true
-                            toggleSelection(book)
+                            if !selectedBooks.contains(where: { $0.id == book.id }) {
+                                selectedBooks.append(book)
+                            }
                         }
                     }
                 }
@@ -389,7 +390,6 @@ struct ListBookshelfView: View {
     @Binding var bookForDetail: Book?
     @Binding var isEditMode: Bool
     @Binding var selectedBooks: [Book]
-    @Binding var bookToRead: Book?
     @EnvironmentObject var bookStore: BookStore
     
     var body: some View {
@@ -399,7 +399,7 @@ struct ListBookshelfView: View {
                     book: book,
                     onTap: {
                         if isEditMode {
-                            bookToRead = book
+                            toggleSelection(book)
                         } else {
                             selectedBook = book
                         }
@@ -431,7 +431,9 @@ struct ListBookshelfView: View {
             .onLongPressGesture(minimumDuration: 0.5) {
                 withAnimation {
                     isEditMode = true
-                    toggleSelection(book)
+                    if !selectedBooks.contains(where: { $0.id == book.id }) {
+                        selectedBooks.append(book)
+                    }
                 }
             }
         }

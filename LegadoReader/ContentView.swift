@@ -80,7 +80,6 @@ struct BookshelfView: View {
     @State private var showingReadingHistory = false
     @State private var selectedBooks: [Book] = []
     @State private var isEditMode = false
-    @State private var bookToRead: Book?
     
     enum BookSortOption: String, CaseIterable, Identifiable {
         case namePinyin = "按书名拼音"
@@ -238,8 +237,7 @@ struct BookshelfView: View {
                                 showingBookDetail: $showingBookDetail,
                                 bookForDetail: $bookForDetail,
                                 isEditMode: $isEditMode,
-                                selectedBooks: $selectedBooks,
-                                bookToRead: $bookToRead
+                                selectedBooks: $selectedBooks
                             )
                         } else {
                             ListBookshelfView(
@@ -250,8 +248,7 @@ struct BookshelfView: View {
                                 showingBookDetail: $showingBookDetail,
                                 bookForDetail: $bookForDetail,
                                 isEditMode: $isEditMode,
-                                selectedBooks: $selectedBooks,
-                                bookToRead: $bookToRead
+                                selectedBooks: $selectedBooks
                             )
                         }
                     }
@@ -384,17 +381,6 @@ struct BookshelfView: View {
             .sheet(isPresented: $showingBatchEdit) {
                 BookshelfBatchEditView(selectedBooks: $selectedBooks)
                     .environmentObject(bookStore)
-            }
-            .sheet(item: $bookToRead) { book in
-                EnhancedBookDetailView(book: book)
-            }
-            .onChange(of: bookToRead) { newValue in
-                if newValue != nil {
-                    withAnimation {
-                        isEditMode = false
-                        selectedBooks.removeAll()
-                    }
-                }
             }
         }
     }
