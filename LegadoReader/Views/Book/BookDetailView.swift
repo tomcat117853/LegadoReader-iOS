@@ -1,9 +1,12 @@
 import SwiftUI
 import UIKit
+import CoreGraphics
 
 struct BookDetailView: View {
     @Environment(\.dismiss) var dismiss
     @State private var book: Book
+    @State private var dominantColors: [Color] = [.orange, .red]
+    @State private var isLoadingColors = false
     @State private var editingTitle = false
     @State private var editingAuthor = false
     @State private var editingTag = false
@@ -49,17 +52,29 @@ struct BookDetailView: View {
             .sheet(isPresented: $showChapterList) {
                 ChapterListView(book: book, chapters: [])
             }
+            .onAppear {
+                loadCoverColors()
+            }
         }
     }
     
     private var headerSection: some View {
         ZStack(alignment: .topLeading) {
-            LinearGradient(
-                gradient: Gradient(colors: [Color.orange.opacity(0.8), Color.red.opacity(0.9)]),
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 280)
+            if isLoadingColors {
+                LinearGradient(
+                    gradient: Gradient(colors: [Color.orange.opacity(0.8), Color.red.opacity(0.9)]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 280)
+            } else {
+                LinearGradient(
+                    gradient: Gradient(colors: dominantColors),
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 280)
+            }
             
             VStack(alignment: .leading) {
                 HStack {
@@ -84,6 +99,11 @@ struct BookDetailView: View {
                                 image
                                     .resizable()
                                     .aspectRatio(contentMode: .fill)
+                                    .frame(width: 120, height: 160)
+                                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                                    .onSuccess { _ in
+                                        loadCoverColors()
+                                    }
                             } placeholder: {
                                 VStack {
                                     Image(systemName: "book.fill")
@@ -105,6 +125,7 @@ struct BookDetailView: View {
                             .foregroundColor(.white.opacity(0.7))
                         }
                     }
+                    .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
                     
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(alignment: .center, spacing: 4) {
@@ -137,6 +158,114 @@ struct BookDetailView: View {
         }
     }
     
+    private func loadCoverColors() {
+        guard let cover = book.cover, let url = URL(string: cover) else {
+            return
+        }
+        
+        isLoadingColors = true
+        
+        URLSession.shared.dataTask(with: url) { data, _, _ in
+            guard let data = data, let image = UIImage(data: data) else {
+                DispatchQueue.main.async {
+                    isLoadingColors = false
+                }
+                return
+            }
+            
+            let colors = extractDominantColors(from: image)
+            DispatchQueue.main.async {
+                if colors.isEmpty {
+                    dominantColors = [.orange, .red]
+                } else {
+                    dominantColors = colors
+                }
+                isLoadingColors = false
+            }
+        }.resume()
+    }
+    
+    private func extractDominantColors(from image: UIImage) -> [Color] {
+        guard let inputImage = CIImage(image: image) else { return [] }
+        
+        let extentVector = CIVector(
+            x: inputImage.extent.origin.x,
+            y: inputImage.extent.origin.y,
+            z: inputImage.extent.size.width,
+            w: inputImage.extent.size.height
+        )
+        
+        guard let filter = CIFilter(
+            name: "CIAreaAverage",
+            parameters: [kCIInputImageKey: inputImage, kCIInputExtentKey: extentVector]
+        ) else { return [] }
+        
+        guard let outputImage = filter.outputImage else { return [] }
+        
+        var bitmap = [UInt8](repeating: 0, count: 4)
+        let context = CIContext(options: [.workingColorSpace: kCFNull as Any])
+        context.render(
+            outputImage,
+            toBitmap: &bitmap,
+            rowBytes: 4,
+            bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+            format: .RGBA8,
+            colorSpace: nil
+        )
+        
+        let primaryColor = UIColor(
+            red: CGFloat(bitmap[0]) / 255,
+            green: CGFloat(bitmap[1]) / 255,
+            blue: CGFloat(bitmap[2]) / 255,
+            alpha: 1.0
+        )
+        
+        let primarySwiftUIColor = Color(primaryColor)
+        
+        let darkerColor = adjustBrightness(primaryColor, factor: 0.7)
+        let lighterColor = adjustBrightness(primaryColor, factor: 1.3)
+        
+        let saturationBoost = saturate(primaryColor, factor: 1.2)
+        
+        return [
+            Color(saturationBoost),
+            primarySwiftUIColor,
+            Color(darkerColor)
+        ]
+    }
+    
+    private func adjustBrightness(_ color: UIColor, factor: CGFloat) -> UIColor {
+        var hue: CGFloat = 0
+        var saturation: CGFloat = 0
+        var brightness: CGFloat = 0
+        var alpha: CGFloat = 0
+        
+        color.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
+        
+        return UIColor(
+            hue: hue,
+            saturation: min(saturation * factor, 1.0),
+            brightness: min(brightness * factor, 1.0),
+            alpha: alpha
+        )
+    }
+    
+    private func saturate(_ color: UIColor, factor: CGFloat) -> UIColor {
+        var hue: CGFloat = 0
+        var saturation: CGFloat = 0
+        var brightness: CGFloat = 0
+        var alpha: CGFloat = 0
+        
+        color.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
+        
+        return UIColor(
+            hue: hue,
+            saturation: min(saturation * factor, 1.0),
+            brightness: brightness,
+            alpha: alpha
+        )
+    }
+    
     private var infoSection: some View {
         VStack(spacing: 16) {
             HStack {
@@ -156,13 +285,11 @@ struct BookDetailView: View {
             }
             
             Button(action: { editingDesc = true }) {
-                HStack {
-                    Text(book.intro?.isEmpty ?? true ? "无简介，点击可修改" : book.intro!)
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary)
-                        .lineLimit(2)
-                    Spacer()
-                }
+                Text(book.intro?.isEmpty ?? true ? "无简介，点击可修改" : book.intro!)
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .padding(.horizontal, 16)
@@ -170,8 +297,8 @@ struct BookDetailView: View {
         .background(Color(UIColor.systemBackground))
         .cornerRadius(12)
         .shadow(color: .black.opacity(0.1), radius: 2)
-        .margin(.top, -20)
-        .margin(.horizontal, 16)
+        .padding(.top, -20)
+        .padding(.horizontal, 16)
     }
     
     private var detailSection: some View {
@@ -187,8 +314,8 @@ struct BookDetailView: View {
         .padding(.top, 8)
         .background(Color(UIColor.systemBackground))
         .cornerRadius(12)
-        .margin(.top, 12)
-        .margin(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.horizontal, 16)
     }
     
     private var syncSection: some View {
@@ -201,8 +328,8 @@ struct BookDetailView: View {
         .padding(.top, 8)
         .background(Color(UIColor.systemBackground))
         .cornerRadius(12)
-        .margin(.top, 12)
-        .margin(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.horizontal, 16)
     }
     
     private var fileSection: some View {
@@ -219,8 +346,8 @@ struct BookDetailView: View {
         .padding(.horizontal, 16)
         .background(Color(UIColor.systemBackground))
         .cornerRadius(12)
-        .margin(.top, 12)
-        .margin(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.horizontal, 16)
     }
     
     private var contentSection: some View {
@@ -245,8 +372,8 @@ struct BookDetailView: View {
         .padding(.top, 8)
         .background(Color(UIColor.systemBackground))
         .cornerRadius(12)
-        .margin(.top, 12)
-        .margin(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.horizontal, 16)
     }
     
     private var securitySection: some View {
@@ -264,8 +391,8 @@ struct BookDetailView: View {
         .padding(.horizontal, 16)
         .background(Color(UIColor.systemBackground))
         .cornerRadius(12)
-        .margin(.top, 12)
-        .margin(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.horizontal, 16)
     }
     
     private var actionSection: some View {
@@ -281,9 +408,9 @@ struct BookDetailView: View {
             .background(Color.blue.opacity(0.1))
             .cornerRadius(12)
         }
-        .margin(.top, 16)
-        .margin(.horizontal, 16)
-        .margin(.bottom, 32)
+        .padding(.top, 16)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 32)
     }
     
     private func reparseBook() {
@@ -334,22 +461,5 @@ struct DetailRow: View {
         
         Divider()
             .padding(.leading, 16)
-    }
-}
-
-extension View {
-    func margin(_ edge: Edge.Set, _ length: CGFloat) -> some View {
-        switch edge {
-        case .top:
-            return self.padding(.top, length)
-        case .bottom:
-            return self.padding(.bottom, length)
-        case .leading, .horizontal:
-            return self.padding(.leading, length)
-        case .trailing:
-            return self.padding(.trailing, length)
-        default:
-            return self.padding(length)
-        }
     }
 }
