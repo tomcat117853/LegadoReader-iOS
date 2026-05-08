@@ -307,33 +307,3 @@ struct FontPickerView: View {
             }
         }
     }
-}
-
-struct FontMappingPreviewView: View {
-    @StateObject private var mappingManager = FontMappingManager.shared
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("预览文本")
-                .font(.headline)
-            
-            let previewText = "中文 English 日本語 한국어 123"
-            Text(previewText)
-                .font(.system(size: 18))
-                .lineSpacing(8)
-            
-            if mappingManager.enabled {
-                Text("已启用字体映射")
-                    .font(.caption)
-                    .foregroundColor(.green)
-            } else {
-                Text("字体映射已关闭")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-        }
-        .padding()
-        .background(Color(.systemGray6))
-        .cornerRadius(12)
-    }
-}
