@@ -64,6 +64,8 @@ struct BookshelfView: View {
     @State private var selectedBook: Book?
     @State private var searchText = ""
     @State private var isSearchActive = false
+    @State private var scrollOffset: CGFloat = 0
+    @State private var lastScrollOffset: CGFloat = 0
     
     private var filteredBooks: [Book] {
         if searchText.isEmpty {
@@ -85,10 +87,15 @@ struct BookshelfView: View {
                 PullToSearchView(
                     searchText: $searchText,
                     isSearchActive: $isSearchActive,
-                    triggerHeight: 60
+                    pullOffset: scrollOffset
                 )
+                .animation(.easeInOut(duration: 0.2), value: isSearchActive)
                 
                 ScrollView {
+                    GeometryReader { geo in
+                        Color.clear
+                            .preference(key: ScrollOffsetKey.self, value: geo.frame(in: .named("scroll")).minY)
+                    }
                     LazyVStack(spacing: 0) {
                         if bookStore.books.isEmpty {
                             EmptyBookshelfView()
@@ -111,6 +118,10 @@ struct BookshelfView: View {
                             ListBookshelfView(books: filteredBooks, selectedBook: $selectedBook)
                         }
                     }
+                }
+                .coordinateSpace(name: "scroll")
+                .onPreferenceChange(ScrollOffsetKey.self) { value in
+                    handleScrollOffset(value)
                 }
                 .refreshable {
                     await refreshData()
@@ -155,27 +166,45 @@ struct BookshelfView: View {
         }
     }
     
+    private func handleScrollOffset(_ offset: CGFloat) {
+        scrollOffset = offset
+        
+        if offset > 80 && !isSearchActive {
+            isSearchActive = true
+        } else if offset > 60 && isSearchActive && !searchText.isEmpty {
+            isSearchActive = false
+        }
+    }
+    
     private func refreshData() async {
         try? await Task.sleep(nanoseconds: 500_000_000)
+    }
+}
+
+struct ScrollOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 
 struct PullToSearchView: View {
     @Binding var searchText: String
     @Binding var isSearchActive: Bool
-    let triggerHeight: CGFloat
-    @State private var pullOffset: CGFloat = 0
-    @State private var isPulling = false
+    var pullOffset: CGFloat
     
     var body: some View {
         ZStack {
-            if pullOffset > 0 || isSearchActive {
+            if isSearchActive || pullOffset > 50 {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass")
                         .foregroundColor(.gray)
                     
                     TextField("搜索书架", text: $searchText)
                         .textFieldStyle(.plain)
+                        .onTapGesture {
+                            isSearchActive = true
+                        }
                     
                     if !searchText.isEmpty {
                         Button(action: { searchText = "" }) {
@@ -188,7 +217,6 @@ struct PullToSearchView: View {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             searchText = ""
                             isSearchActive = false
-                            isPulling = false
                         }
                     }
                     .foregroundColor(.blue)
@@ -199,39 +227,9 @@ struct PullToSearchView: View {
                 .cornerRadius(10)
                 .padding(.horizontal)
                 .padding(.vertical, 8)
-                .opacity(isSearchActive ? 1 : min(1, pullOffset / triggerHeight))
-            } else {
-                VStack(spacing: 4) {
-                    Image(systemName: "arrow.down")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                    Text("下拉搜索")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-                .frame(height: 50)
             }
         }
-        .frame(height: isSearchActive ? 60 : (isPulling ? 50 + pullOffset : 50))
-        .offset(y: isPulling ? pullOffset : 0)
-        .gesture(
-            DragGesture()
-                .onChanged { value in
-                    if value.translation.height > 0 && !isSearchActive {
-                        isPulling = true
-                        pullOffset = value.translation.height
-                    }
-                }
-                .onEnded { value in
-                    if value.translation.height > triggerHeight {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            isSearchActive = true
-                        }
-                    }
-                    pullOffset = 0
-                    isPulling = false
-                }
-        )
+        .frame(height: isSearchActive ? 60 : 0)
     }
 }
 
