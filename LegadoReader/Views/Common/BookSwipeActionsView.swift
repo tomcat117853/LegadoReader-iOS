@@ -172,6 +172,9 @@ struct GridBookshelfView: View {
     @Binding var bookToGroup: Book?
     @Binding var showingBookDetail: Bool
     @Binding var bookForDetail: Book?
+    @Binding var isEditMode: Bool
+    @Binding var selectedBooks: [Book]
+    @Binding var bookToRead: Book?
     @EnvironmentObject var bookStore: BookStore
     
     let columns = [
@@ -184,23 +187,65 @@ struct GridBookshelfView: View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 16) {
                 ForEach(books) { book in
-                    BookSwipeActionsView(
-                        book: book,
-                        onTap: { selectedBook = book },
-                        onTop: { moveBookToTop(book) },
-                        onListen: { startListening(book) },
-                        onGroup: { showGroupSelector(book) },
-                        onDetail: { showBookDetail(book) },
-                        onDelete: { deleteBook(book) }
-                    ) {
-                        BookGridItem(book: book)
+                    ZStack(alignment: .topTrailing) {
+                        BookSwipeActionsView(
+                            book: book,
+                            onTap: {
+                                if isEditMode {
+                                    bookToRead = book
+                                } else {
+                                    selectedBook = book
+                                }
+                            },
+                            onTop: { moveBookToTop(book) },
+                            onListen: { startListening(book) },
+                            onGroup: { showGroupSelector(book) },
+                            onDetail: { showBookDetail(book) },
+                            onDelete: { deleteBook(book) }
+                        ) {
+                            BookGridItem(book: book)
+                        }
+                        .contextMenu {
+                            BookContextMenu(book: book)
+                        }
+                        .overlay(
+                            isEditMode ? selectionOverlay(for: book) : nil
+                        )
+                        
+                        if isEditMode {
+                            Button(action: { toggleSelection(book) }) {
+                                Image(systemName: selectedBooks.contains { $0.id == book.id } ? "checkmark.circle.fill" : "circle")
+                                    .font(.title2)
+                                    .foregroundColor(selectedBooks.contains { $0.id == book.id } ? .blue : .gray)
+                                    .background(Color.white)
+                                    .clipShape(Circle())
+                            }
+                            .padding(8)
+                        }
                     }
-                    .contextMenu {
-                        BookContextMenu(book: book)
+                    .onLongPressGesture(minimumDuration: 0.5) {
+                        withAnimation {
+                            isEditMode = true
+                            toggleSelection(book)
+                        }
                     }
                 }
             }
             .padding()
+        }
+    }
+    
+    @ViewBuilder
+    private func selectionOverlay(for book: Book) -> some View {
+        RoundedRectangle(cornerRadius: 8)
+            .stroke(selectedBooks.contains { $0.id == book.id } ? Color.blue : Color.clear, lineWidth: 3)
+    }
+    
+    private func toggleSelection(_ book: Book) {
+        if let index = selectedBooks.firstIndex(where: { $0.id == book.id }) {
+            selectedBooks.remove(at: index)
+        } else {
+            selectedBooks.append(book)
         }
     }
     
@@ -342,27 +387,63 @@ struct ListBookshelfView: View {
     @Binding var bookToGroup: Book?
     @Binding var showingBookDetail: Bool
     @Binding var bookForDetail: Book?
+    @Binding var isEditMode: Bool
+    @Binding var selectedBooks: [Book]
+    @Binding var bookToRead: Book?
     @EnvironmentObject var bookStore: BookStore
     
     var body: some View {
         List(books) { book in
-            BookSwipeActionsView(
-                book: book,
-                onTap: { selectedBook = book },
-                onTop: { moveBookToTop(book) },
-                onListen: { startListening(book) },
-                onGroup: { showGroupSelector(book) },
-                onDetail: { showBookDetail(book) },
-                onDelete: { deleteBook(book) }
-            ) {
-                BookListItem(book: book)
+            ZStack(alignment: .leading) {
+                BookSwipeActionsView(
+                    book: book,
+                    onTap: {
+                        if isEditMode {
+                            bookToRead = book
+                        } else {
+                            selectedBook = book
+                        }
+                    },
+                    onTop: { moveBookToTop(book) },
+                    onListen: { startListening(book) },
+                    onGroup: { showGroupSelector(book) },
+                    onDetail: { showBookDetail(book) },
+                    onDelete: { deleteBook(book) }
+                ) {
+                    HStack(spacing: 12) {
+                        if isEditMode {
+                            Button(action: { toggleSelection(book) }) {
+                                Image(systemName: selectedBooks.contains { $0.id == book.id } ? "checkmark.circle.fill" : "circle")
+                                    .font(.title)
+                                    .foregroundColor(selectedBooks.contains { $0.id == book.id } ? .blue : .gray)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        
+                        BookListItem(book: book)
+                    }
+                }
             }
             .listRowInsets(EdgeInsets())
             .contextMenu {
                 BookContextMenu(book: book)
             }
+            .onLongPressGesture(minimumDuration: 0.5) {
+                withAnimation {
+                    isEditMode = true
+                    toggleSelection(book)
+                }
+            }
         }
         .listStyle(.plain)
+    }
+    
+    private func toggleSelection(_ book: Book) {
+        if let index = selectedBooks.firstIndex(where: { $0.id == book.id }) {
+            selectedBooks.remove(at: index)
+        } else {
+            selectedBooks.append(book)
+        }
     }
     
     private func showBookDetail(_ book: Book) {

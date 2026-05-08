@@ -79,6 +79,8 @@ struct BookshelfView: View {
     @State private var showingBatchEdit = false
     @State private var showingReadingHistory = false
     @State private var selectedBooks: [Book] = []
+    @State private var isEditMode = false
+    @State private var bookToRead: Book?
     
     enum BookSortOption: String, CaseIterable, Identifiable {
         case namePinyin = "按书名拼音"
@@ -228,9 +230,29 @@ struct BookshelfView: View {
                             }
                             .frame(maxWidth: .infinity, minHeight: 300)
                         } else if isGridView {
-                            GridBookshelfView(books: filteredBooks, selectedBook: $selectedBook, showingGroupSelector: $showingGroupSelector, bookToGroup: $bookToGroup, showingBookDetail: $showingBookDetail, bookForDetail: $bookForDetail)
+                            GridBookshelfView(
+                                books: filteredBooks,
+                                selectedBook: $selectedBook,
+                                showingGroupSelector: $showingGroupSelector,
+                                bookToGroup: $bookToGroup,
+                                showingBookDetail: $showingBookDetail,
+                                bookForDetail: $bookForDetail,
+                                isEditMode: $isEditMode,
+                                selectedBooks: $selectedBooks,
+                                bookToRead: $bookToRead
+                            )
                         } else {
-                            ListBookshelfView(books: filteredBooks, selectedBook: $selectedBook, showingGroupSelector: $showingGroupSelector, bookToGroup: $bookToGroup, showingBookDetail: $showingBookDetail, bookForDetail: $bookForDetail)
+                            ListBookshelfView(
+                                books: filteredBooks,
+                                selectedBook: $selectedBook,
+                                showingGroupSelector: $showingGroupSelector,
+                                bookToGroup: $bookToGroup,
+                                showingBookDetail: $showingBookDetail,
+                                bookForDetail: $bookForDetail,
+                                isEditMode: $isEditMode,
+                                selectedBooks: $selectedBooks,
+                                bookToRead: $bookToRead
+                            )
                         }
                     }
                 }
@@ -244,58 +266,89 @@ struct BookshelfView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: { isGridView.toggle() }) {
-                        Image(systemName: isGridView ? "list.bullet" : "square.grid.2x2")
+                    if isEditMode {
+                        Button("取消") {
+                            withAnimation {
+                                isEditMode = false
+                                selectedBooks.removeAll()
+                            }
+                        }
+                    } else {
+                        Button(action: { isGridView.toggle() }) {
+                            Image(systemName: isGridView ? "list.bullet" : "square.grid.2x2")
+                        }
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Menu {
-                        ForEach(BookSortOption.allCases) { option in
-                            Button(action: {
-                                sortOption = option
-                            }) {
-                                HStack {
-                                    Image(systemName: option.icon)
-                                    Text(option.rawValue)
-                                    if sortOption == option {
-                                        Spacer()
-                                        Image(systemName: "checkmark")
+                    if isEditMode {
+                        Button("全选") {
+                            if selectedBooks.count == filteredBooks.count {
+                                selectedBooks.removeAll()
+                            } else {
+                                selectedBooks = filteredBooks
+                            }
+                        }
+                    } else {
+                        Menu {
+                            ForEach(BookSortOption.allCases) { option in
+                                Button(action: {
+                                    sortOption = option
+                                }) {
+                                    HStack {
+                                        Image(systemName: option.icon)
+                                        Text(option.rawValue)
+                                        if sortOption == option {
+                                            Spacer()
+                                            Image(systemName: "checkmark")
+                                        }
                                     }
                                 }
                             }
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "arrow.up.arrow.down")
-                            Image(systemName: "chevron.down")
-                                .font(.caption2)
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.up.arrow.down")
+                                Image(systemName: "chevron.down")
+                                    .font(.caption2)
+                            }
                         }
                     }
                 }
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
-                    Button(action: { showingReadingHistory = true }) {
-                        Image(systemName: "clock")
-                    }
-                    Button(action: { showingBrowser = true }) {
-                        Image(systemName: "globe")
-                    }
-                    Button(action: { showingNotifications = true }) {
-                        ZStack(alignment: .topTrailing) {
-                            Image(systemName: "bell")
-                            if notificationManager.getUnreadCount() > 0 {
-                                Text("\(notificationManager.getUnreadCount())")
-                                    .font(.caption2)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.white)
-                                    .padding(4)
-                                    .background(Color.red)
-                                    .clipShape(Circle())
-                                    .offset(x: 8, y: -8)
+                    if isEditMode {
+                        if !selectedBooks.isEmpty {
+                            Button("删除") {
+                                selectedBooks.forEach { book in
+                                    bookStore.removeBook(book)
+                                }
+                                selectedBooks.removeAll()
+                            }
+                            .foregroundColor(.red)
+                        }
+                    } else {
+                        Button(action: { showingReadingHistory = true }) {
+                            Image(systemName: "clock")
+                        }
+                        Button(action: { showingBrowser = true }) {
+                            Image(systemName: "globe")
+                        }
+                        Button(action: { showingNotifications = true }) {
+                            ZStack(alignment: .topTrailing) {
+                                Image(systemName: "bell")
+                                if notificationManager.getUnreadCount() > 0 {
+                                    Text("\(notificationManager.getUnreadCount())")
+                                        .font(.caption2)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.white)
+                                        .padding(4)
+                                        .background(Color.red)
+                                        .clipShape(Circle())
+                                        .offset(x: 8, y: -8)
+                                }
                             }
                         }
-                    }
-                    Button(action: { showingBatchEdit = true }) {
-                        Image(systemName: "square.and.pencil")
+                        Button(action: { showingBatchEdit = true }) {
+                            Image(systemName: "square.and.pencil")
+                        }
                     }
                 }
             }
@@ -331,6 +384,17 @@ struct BookshelfView: View {
             .sheet(isPresented: $showingBatchEdit) {
                 BookshelfBatchEditView(selectedBooks: $selectedBooks)
                     .environmentObject(bookStore)
+            }
+            .sheet(item: $bookToRead) { book in
+                EnhancedBookDetailView(book: book)
+            }
+            .onChange(of: bookToRead) { newValue in
+                if newValue != nil {
+                    withAnimation {
+                        isEditMode = false
+                        selectedBooks.removeAll()
+                    }
+                }
             }
         }
     }
