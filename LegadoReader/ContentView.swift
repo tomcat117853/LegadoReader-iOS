@@ -71,8 +71,10 @@ struct ContentView: View {
 
 struct BookshelfView: View {
     @EnvironmentObject var bookStore: BookStore
+    @StateObject private var notificationManager = UpdateNotificationManager.shared
     @State private var isGridView = true
     @State private var showingSearch = false
+    @State private var showingNotifications = false
     @State private var selectedBook: Book?
     
     var body: some View {
@@ -93,7 +95,22 @@ struct BookshelfView: View {
                         Image(systemName: isGridView ? "list.bullet" : "square.grid.2x2")
                     }
                 }
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItemGroup(placement: .navigationBarTrailing) {
+                    Button(action: { showingNotifications = true }) {
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: "bell")
+                            if notificationManager.getUnreadCount() > 0 {
+                                Text("\(notificationManager.getUnreadCount())")
+                                    .font(.caption2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.white)
+                                    .padding(4)
+                                    .background(Color.red)
+                                    .clipShape(Circle())
+                                    .offset(x: 8, y: -8)
+                            }
+                        }
+                    }
                     Button(action: { showingSearch = true }) {
                         Image(systemName: "magnifyingglass")
                     }
@@ -101,6 +118,9 @@ struct BookshelfView: View {
             }
             .sheet(isPresented: $showingSearch) {
                 SearchView()
+            }
+            .sheet(isPresented: $showingNotifications) {
+                UpdateHistoryView()
             }
             .sheet(item: $selectedBook) { book in
                 BookDetailView(book: book)
