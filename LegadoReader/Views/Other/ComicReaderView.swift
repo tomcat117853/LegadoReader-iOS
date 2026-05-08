@@ -99,6 +99,16 @@ struct ComicReaderView: View {
                     .onTapGesture { location in
                         handleTap(at: location, in: geometry.size)
                     }
+                    
+                    if let position = magnifierPosition,
+                       let image = comicManager.getPage(at: comicManager.currentPage) {
+                        MagnifierView(
+                            image: image,
+                            position: position,
+                            viewSize: geometry.size,
+                            radius: settings.magnifierSize.radius
+                        )
+                    }
                 }
             }
         }
@@ -304,33 +314,38 @@ struct MagnifierView: View {
     
     var body: some View {
         GeometryReader { geometry in
+            let magnifierSize = radius * 2
+            let magnifiedImageSize = magnifierSize * 2
+            let magnification: CGFloat = 2.0
+            
             ZStack {
                 Circle()
-                    .fill(Color.white)
-                    .frame(width: radius * 2, height: radius * 2)
-                    .shadow(radius: 5)
+                    .fill(Color.black.opacity(0.9))
+                    .frame(width: magnifierSize, height: magnifierSize)
+                    .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
                 
                 Image(uiImage: image)
                     .resizable()
-                    .frame(width: radius * 4, height: radius * 4)
-                    .scaleEffect(2.0)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: magnifiedImageSize, height: magnifiedImageSize)
+                    .scaleEffect(magnification)
                     .offset(
-                        x: -position.x * 2 + radius,
-                        y: -position.y * 2 + radius
+                        x: -position.x * magnification + magnifierSize / 2,
+                        y: -position.y * magnification + magnifierSize / 2
                     )
                     .clipShape(Circle())
                 
                 Circle()
-                    .stroke(Color.white, lineWidth: 3)
-                    .frame(width: radius * 2, height: radius * 2)
+                    .stroke(Color.white, lineWidth: 2)
+                    .frame(width: magnifierSize - 4, height: magnifierSize - 4)
                 
                 Circle()
-                    .stroke(Color.gray.opacity(0.5), lineWidth: 1)
-                    .frame(width: radius * 2 - 4, height: radius * 2 - 4)
+                    .stroke(Color.yellow.opacity(0.5), lineWidth: 1)
+                    .frame(width: magnifierSize / magnification, height: magnifierSize / magnification)
             }
             .position(
-                x: min(max(radius + 20, position.x), geometry.size.width - radius - 20),
-                y: min(max(radius + 20, position.y - 100), geometry.size.height - radius - 20)
+                x: min(max(magnifierSize / 2 + 20, position.x), geometry.size.width - magnifierSize / 2 - 20),
+                y: min(max(magnifierSize + 20, position.y - 120), geometry.size.height - magnifierSize - 20)
             )
         }
     }
