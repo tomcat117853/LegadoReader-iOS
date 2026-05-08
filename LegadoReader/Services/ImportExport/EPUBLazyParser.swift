@@ -20,6 +20,9 @@ class LazyEPUBBook: ObservableObject {
     private let maxCacheCount = 5
     private let lock = NSLock()
     
+    @Published var statistics: BookStatistics?
+    @Published var isStatisticsCalculating: Bool = false
+    
     init(data: Data) throws {
         self.epubData = data
         self.metadata = EPUBMetadata()
@@ -371,6 +374,110 @@ class LazyEPUBBook: ObservableObject {
     }
 }
 
+struct BookStatistics {
+    var totalCharacters: Int = 0
+    var totalWords: Int = 0
+    var totalChapters: Int = 0
+    var chapterWordCounts: [Int: Int] = [:]
+    var isCalculated: Bool = false
+    
+    var formattedTotalCharacters: String {
+        if totalCharacters >= 10000 {
+            return String(format: "%.1f万字", Double(totalCharacters) / 10000.0)
+        }
+        return "\(totalCharacters)字"
+    }
+    
+    var formattedTotalWords: String {
+        if totalWords >= 10000 {
+            return String(format: "%.1f万词", Double(totalWords) / 10000.0)
+        }
+        return "\(totalWords)词"
+    }
+}
+
+extension LazyEPUBBook {
+    func calculateStatistics(progressCallback: ((Double) -> Void)? = nil) async {
+        await MainActor.run {
+            self.isStatisticsCalculating = true
+            self.statistics = BookStatistics()
+        }
+        
+        var totalChars = 0
+        var totalWords = 0
+        let total = chapters.count
+        
+        for (index, _) in chapters.enumerated() {
+            do {
+                let chapter = try await loadChapter(at: index)
+                let text = extractPlainText(from: chapter.content)
+                
+                let charCount = text.count
+                let wordCount = countWords(in: text)
+                
+                totalChars += charCount
+                totalWords += wordCount
+                
+                await MainActor.run {
+                    self.statistics?.chapterWordCounts[index] = wordCount
+                    self.statistics?.totalCharacters = totalChars
+                    self.statistics?.totalWords = totalWords
+                }
+                
+                let progress = Double(index + 1) / Double(total)
+                progressCallback?(progress)
+                
+            } catch {
+                print("统计章节 \(index) 失败: \(error)")
+            }
+        }
+        
+        await MainActor.run {
+            self.statistics?.totalChapters = total
+            self.statistics?.isCalculated = true
+            self.isStatisticsCalculating = false
+        }
+    }
+    
+    private func extractPlainText(from html: String) -> String {
+        var text = html
+        
+        text = text.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+        
+        text = text.replacingOccurrences(of: "&nbsp;", with: " ")
+        text = text.replacingOccurrences(of: "&amp;", with: "&")
+        text = text.replacingOccurrences(of: "&lt;", with: "<")
+        text = text.replacingOccurrences(of: "&gt;", with: ">")
+        text = text.replacingOccurrences(of: "&quot;", with: "\"")
+        text = text.replacingOccurrences(of: "&#\\d+;", with: "", options: .regularExpression)
+        
+        text = text.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
+    private func countWords(in text: String) -> Int {
+        let chinesePattern = "[\\u4e00-\\u9fa5]+"
+        let englishPattern = "[a-zA-Z]+"
+        
+        var count = 0
+        
+        if let chineseRegex = try? NSRegularExpression(pattern: chinesePattern, options: []) {
+            let range = NSRange(text.startIndex..., in: text)
+            let matches = chineseRegex.matches(in: text, options: [], range: range)
+            count += matches.reduce(0) { $0 + $1.range.length }
+        }
+        
+        if let englishRegex = try? NSRegularExpression(pattern: englishPattern, options: []) {
+            let range = NSRange(text.startIndex..., in: text)
+            let matches = englishRegex.matches(in: text, options: [], range: range)
+            count += matches.count
+        }
+        
+        return count
+    }
+}
+
 class EPUBParsingManager {
     static let shared = EPUBParsingManager()
     
@@ -554,5 +661,115 @@ class EPUBLazyChapterLoader: ObservableObject {
     func cancel() {
         currentTask?.cancel()
         isLoading = false
+    }
+}
+
+class EPUBLazyStatisticsCalculator {
+    static let shared = EPUBLazyStatisticsCalculator()
+    
+    private var calculationTasks: [String: Task<BookStatistics, Never>] = [:]
+    private let lock = NSLock()
+    
+    private init() {}
+    
+    func calculateStatistics(for bookId: String, book: LazyEPUBBook, progressCallback: ((Double) -> Void)? = nil) async -> BookStatistics {
+        lock.lock()
+        if let existingTask = calculationTasks[bookId] {
+            lock.unlock()
+            return await existingTask.value
+        }
+        lock.unlock()
+        
+        let task = Task {
+            var stats = BookStatistics()
+            var totalChars = 0
+            var totalWords = 0
+            let total = book.chapters.count
+            
+            for (index, _) in book.chapters.enumerated() {
+                guard !Task.isCancelled else {
+                    return BookStatistics()
+                }
+                
+                do {
+                    let chapter = try await book.loadChapter(at: index)
+                    let text = extractPlainText(from: chapter.content)
+                    
+                    let charCount = text.count
+                    let wordCount = countWords(in: text)
+                    
+                    totalChars += charCount
+                    totalWords += wordCount
+                    
+                    stats.totalCharacters = totalChars
+                    stats.totalWords = totalWords
+                    stats.chapterWordCounts[index] = wordCount
+                    
+                    let progress = Double(index + 1) / Double(total)
+                    progressCallback?(progress)
+                    
+                } catch {
+                    print("统计章节 \(index) 失败")
+                }
+            }
+            
+            stats.totalChapters = total
+            stats.isCalculated = true
+            
+            lock.lock()
+            calculationTasks.removeValue(forKey: bookId)
+            lock.unlock()
+            
+            return stats
+        }
+        
+        lock.lock()
+        calculationTasks[bookId] = task
+        lock.unlock()
+        
+        let result = await task.value
+        return result
+    }
+    
+    func cancelCalculation(for bookId: String) {
+        lock.lock()
+        calculationTasks[bookId]?.cancel()
+        calculationTasks.removeValue(forKey: bookId)
+        lock.unlock()
+    }
+    
+    func cancelAllCalculations() {
+        lock.lock()
+        for (_, task) in calculationTasks {
+            task.cancel()
+        }
+        calculationTasks.removeAll()
+        lock.unlock()
+    }
+    
+    private func extractPlainText(from html: String) -> String {
+        var text = html
+        text = text.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+        text = text.replacingOccurrences(of: "&nbsp;", with: " ")
+        text = text.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
+    private func countWords(in text: String) -> Int {
+        var count = 0
+        
+        let chinesePattern = "[\\u4e00-\\u9fa5]+"
+        if let regex = try? NSRegularExpression(pattern: chinesePattern, options: []) {
+            let range = NSRange(text.startIndex..., in: text)
+            count += regex.matches(in: text, options: [], range: range).reduce(0) { $0 + $1.range.length }
+        }
+        
+        let englishPattern = "[a-zA-Z]+"
+        if let regex = try? NSRegularExpression(pattern: englishPattern, options: []) {
+            let range = NSRange(text.startIndex..., in: text)
+            count += regex.matches(in: text, options: [], range: range).count
+        }
+        
+        return count
     }
 }
