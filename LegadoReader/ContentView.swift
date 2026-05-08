@@ -109,7 +109,7 @@ struct BookshelfView: View {
                 UpdateHistoryView()
             }
             .sheet(item: $selectedBook) { book in
-                BookDetailView(book: book)
+                EnhancedBookDetailView(book: book)
             }
         }
     }
