@@ -48,6 +48,19 @@ struct SettingsView: View {
                         }
                     }
                     
+                    NavigationLink(destination: ComicReadingSettingsView()) {
+                        HStack {
+                            Image(systemName: "books.vertical.fill")
+                                .foregroundColor(.red)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("漫画模式设置")
+                                Text("图片模式、翻页方式、缩放放大镜")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    
                     Toggle("夜间模式跟随系统", isOn: .constant(false))
                     
                     Toggle("自动翻页", isOn: $readerSettings.isAutoReading)
