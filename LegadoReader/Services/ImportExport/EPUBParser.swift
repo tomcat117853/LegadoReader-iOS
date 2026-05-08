@@ -116,12 +116,12 @@ class EPUBParser: NSObject {
     
     private func parseContainerXML(_ data: Data) throws -> String {
         guard let content = String(data: data, encoding: .utf8) else {
-            throw EPUBError.invalidContainer
+            throw EPUBParseError.invalidContainer
         }
         
         let pattern = "full-path=\"([^\"]+)\""
         guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
-            throw EPUBError.invalidContainer
+            throw EPUBParseError.invalidContainer
         }
         
         let range = NSRange(content.startIndex..., in: content)
@@ -130,12 +130,12 @@ class EPUBParser: NSObject {
             return String(content[pathRange])
         }
         
-        throw EPUBError.invalidContainer
+        throw EPUBParseError.invalidContainer
     }
     
     private func parseOPF(data: Data, baseURL: URL, into book: inout EPUBBook) throws {
         guard let content = String(data: data, encoding: .utf8) else {
-            throw EPUBError.invalidOPF
+            throw EPUBParseError.invalidOPF
         }
         
         let metadataPattern = "<dc:([^>]+)>([^<]*)</dc:\\1>"
@@ -231,7 +231,7 @@ class EPUBParser: NSObject {
     
     private func parseChapter(data: Data, href: String, stylesheets: [CSSParser.ParsedCSS], baseURL: URL) throws -> EPUBChapter {
         guard let htmlContent = String(data: data, encoding: .utf8) else {
-            throw EPUBError.invalidChapter
+            throw EPUBParseError.invalidChapter
         }
         
         let title = extractTitle(from: htmlContent)
@@ -306,7 +306,7 @@ class EPUBParser: NSObject {
     }
 }
 
-enum EPUBError: Error, LocalizedError {
+class EPUBParseError: Error, LocalizedError {
     case invalidContainer
     case invalidOPF
     case invalidChapter
@@ -321,75 +321,5 @@ enum EPUBError: Error, LocalizedError {
         case .extractionFailed: return "EPUB解压失败"
         case .coverNotFound: return "未找到封面图片"
         }
-    }
-}
-
-class EPUBReader: BookReaderProtocol {
-    private var cachedBook: EPUBParser.EPUBBook?
-    
-    func read(data: Data) async throws -> BookContent {
-        let epub = try await EPUBParser.shared.parse(data: data)
-        cachedBook = epub
-        
-        var content = BookContent()
-        content.title = epub.metadata.title
-        content.author = epub.metadata.author
-        content.cover = epub.coverImage
-        
-        for chapter in epub.chapters {
-            let bookChapter = BookChapter(
-                title: chapter.title,
-                content: chapter.content,
-                level: chapter.level
-            )
-            content.chapters.append(bookChapter)
-        }
-        
-        return content
-    }
-    
-    func extractCover(data: Data) -> Data? {
-        Task {
-            if let epub = try? await EPUBParser.shared.parse(data: data) {
-                return EPUBParser.shared.extractCover(from: epub)
-            }
-            return nil
-        }
-        return nil
-    }
-    
-    func getMetadata(data: Data) -> BookMetadata {
-        Task {
-            if let epub = try? await EPUBParser.shared.parse(data: data) {
-                return BookMetadata(
-                    title: epub.metadata.title,
-                    author: epub.metadata.author,
-                    publisher: epub.metadata.publisher,
-                    description: epub.metadata.description,
-                    language: epub.metadata.language
-                )
-            }
-        }
-        return BookMetadata()
-    }
-    
-    func getTableOfContents(data: Data) -> [BookChapter] {
-        Task {
-            if let epub = try? await EPUBParser.shared.parse(data: data) {
-                return epub.chapters.map { chapter in
-                    BookChapter(
-                        title: chapter.title,
-                        content: chapter.content,
-                        level: chapter.level
-                    )
-                }
-            }
-            return []
-        }
-        return []
-    }
-    
-    func getEPUBBook(data: Data) async throws -> EPUBParser.EPUBBook {
-        return try await EPUBParser.shared.parse(data: data)
     }
 }
