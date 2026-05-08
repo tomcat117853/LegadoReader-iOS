@@ -8,6 +8,7 @@ struct ReaderLayoutView: View {
     @State private var brightness: Double = 0.5
     @State private var showLayoutManager = false
     @State private var showColorManager = false
+    @State private var showColorTemplate = false
     
     private let layoutTypes = ["自定义", "初号", "小初", "一号", "一号宽", "小一", "二号", "小二", "三号", "小三"]
     
@@ -93,7 +94,7 @@ struct ReaderLayoutView: View {
                     }
                     
                     HStack(spacing: 0) {
-                        Button(action: { showColorManager = true }) {
+                        Button(action: { showColorTemplate = true }) {
                             Text("配色")
                                 .font(.subheadline)
                                 .foregroundColor(.white)
@@ -103,7 +104,7 @@ struct ReaderLayoutView: View {
                                 .cornerRadius(20, corners: [.topLeft, .bottomLeft])
                         }
                         
-                        Button(action: { showLayoutManager = true }) {
+                        Button(action: { showColorManager = true }) {
                             Text("管理")
                                 .font(.subheadline)
                                 .foregroundColor(.white)
@@ -151,7 +152,114 @@ struct ReaderLayoutView: View {
             .sheet(isPresented: $showColorManager) {
                 ColorSchemeManagerView()
             }
+            .sheet(isPresented: $showColorTemplate) {
+                ColorTemplateView()
+            }
         }
+    }
+}
+
+struct ColorTemplateView: View {
+    @Environment(\.dismiss) var dismiss
+    
+    @State private var templateName = ""
+    @State private var textColor = Color(hex: "333333")!
+    @State private var widgetColor = Color(hex: "666666")!
+    @State private var bgColor = Color(hex: "E8F5E9")!
+    @State private var appTextColor = Color(hex: "B0B0B0")!
+    @State private var appBgColor = Color(hex: "1B1B1B")!
+    @State private var highlightColor = Color(hex: "1B5E20")!
+    @State private var accentColor1 = Color(hex: "1B5E20")!
+    @State private var accentColor2 = Color(hex: "1B5E20")!
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                Text("创建阅读界面配色模板")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .padding(.top, 20)
+                    .padding(.bottom, 16)
+                
+                VStack(spacing: 0) {
+                    HStack {
+                        Text("名称")
+                            .font(.subheadline)
+                            .foregroundColor(.white)
+                            .padding(.vertical, 12)
+                        
+                        Spacer()
+                        
+                        Button(action: {}) {
+                            Text("颜色")
+                                .font(.subheadline)
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .background(Color(hex: "1B5E20")!)
+                    .cornerRadius(8, corners: [.topLeft, .topRight])
+                    
+                    ColorRow(title: "阅读字体颜色", subtitle: "阅读内容的字体颜色", color: $textColor)
+                    ColorRow(title: "阅读小部件颜色", subtitle: "小部件字体颜色", color: $widgetColor)
+                    ColorRow(title: "阅读背景颜色", subtitle: "阅读内容的背景颜色", color: $bgColor)
+                    ColorRow(title: "App阅读界面字体颜色", subtitle: "阅读界面上字体的颜色", color: $appTextColor)
+                    ColorRow(title: "App阅读界面背景颜色", subtitle: "阅读界面上的背景颜色", color: $appBgColor)
+                    ColorRow(title: "App阅读界面高亮色", subtitle: "阅读界面上选中或高亮的颜色", color: $highlightColor)
+                    ColorRow(title: "阅读附加颜色1", subtitle: "可用于标记或排版强化", color: $accentColor1)
+                    ColorRow(title: "阅读附加颜色2", subtitle: "可用于标记或排版强化", color: $accentColor2)
+                        .background(Color(hex: "1B5E20")!)
+                        .cornerRadius(8, corners: [.bottomLeft, .bottomRight])
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
+                
+                Button(action: { dismiss() }) {
+                    Text("取消")
+                        .font(.subheadline)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 48)
+                        .padding(.vertical, 12)
+                        .background(Color(hex: "1B5E20")!)
+                        .cornerRadius(20)
+                }
+            }
+            .background(Color(hex: "1B5E20")!.opacity(0.95))
+            .presentationDetents([.medium])
+        }
+    }
+}
+
+struct ColorRow: View {
+    let title: String
+    let subtitle: String
+    @Binding var color: Color
+    
+    var body: some View {
+        HStack {
+            color
+                .frame(width: 48, height: 48)
+                .cornerRadius(6)
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.3), lineWidth: 1))
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline)
+                    .foregroundColor(.white)
+                
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.7))
+            }
+            
+            Spacer()
+            
+            Image(systemName: "chevron.right")
+                .foregroundColor(.white.opacity(0.5))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color(hex: "1B5E20")!.opacity(0.5))
     }
 }
 
@@ -307,7 +415,7 @@ struct ColorSchemeManagerView: View {
                 
                 List {
                     ForEach(colorSchemes, id: \.0) { scheme in
-                        HStack {
+                        HStack(spacing: 12) {
                             if isEditing {
                                 Button(action: {
                                     if selectedSchemes.contains(scheme.0) {
@@ -321,20 +429,7 @@ struct ColorSchemeManagerView: View {
                                 }
                             }
                             
-                            ZStack(alignment: .topTrailing) {
-                                scheme.2
-                                    .frame(width: 50, height: 60)
-                                    .cornerRadius(6)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
-                                    )
-                                
-                                Image(systemName: "pencil")
-                                    .font(.caption)
-                                    .foregroundColor(scheme.3)
-                                    .padding(2)
-                            }
+                            ColorPreviewView(bgColor: scheme.2, textColor: scheme.3)
                             
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(scheme.0)
@@ -419,6 +514,51 @@ struct ColorSchemeManagerView: View {
                     }
                 }
             }
+        }
+    }
+}
+
+struct ColorPreviewView: View {
+    let bgColor: Color
+    let textColor: Color
+    
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            bgColor
+                .frame(width: 50, height: 60)
+                .cornerRadius(6)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                )
+            
+            VStack(spacing: 3) {
+                Rectangle()
+                    .fill(textColor)
+                    .frame(height: 4)
+                    .padding(.horizontal, 4)
+                
+                Rectangle()
+                    .fill(textColor)
+                    .frame(height: 3)
+                    .padding(.horizontal, 4)
+                
+                Rectangle()
+                    .fill(textColor)
+                    .frame(height: 3)
+                    .padding(.horizontal, 4)
+                
+                Rectangle()
+                    .fill(textColor)
+                    .frame(height: 3)
+                    .padding(.horizontal, 4)
+            }
+            .padding(.top, 8)
+            
+            Image(systemName: "pencil")
+                .font(.caption)
+                .foregroundColor(textColor)
+                .padding(2)
         }
     }
 }
