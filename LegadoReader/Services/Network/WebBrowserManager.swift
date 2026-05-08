@@ -253,26 +253,53 @@ class WebBrowserManager: NSObject, ObservableObject {
         let url: String
     }
     
+    private let blockedExtensions = ["exe", "msi", "bat", "cmd", "sh", "dmg", "pkg", "app", "deb", "rpm"]
+    
     func extractDownloadLinks(from html: String) -> [DownloadLink] {
         var links: [DownloadLink] = []
         
-        let patterns = [
-            "href=[\"']([^\"']+\\.(txt|epub|pdf|mobi|azw|azw3|cbz|cbr|zip|rar)[^\"']*)[\"']",
-            "href=[\"']([^\"']*download[^\"']*)[\"']"
-        ]
+        let allowedPatterns = ["txt", "epub", "pdf", "mobi", "azw", "azw3", "cbz", "cbr", "zip", "rar", "7z", "tar", "gz"]
         
-        for pattern in patterns {
+        for ext in allowedPatterns {
+            let pattern = "href=[\"']([^\"']+\\.(\(ext))[\"'][^>]*)?"
+
             if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
                 let range = NSRange(html.startIndex..., in: html)
                 let matches = regex.matches(in: html, options: [], range: range)
                 
                 for match in matches {
-                    if match.numberOfRanges >= 1,
-                       let urlRange = Range(match.range(at: 1), in: html) {
+                    if match.numberOfRanges >= 2,
+                       let urlRange = Range(match.range(at: 1), in: html),
+                       let extRange = Range(match.range(at: 2), in: html) {
                         let url = String(html[urlRange])
-                        let fileName = URL(string: url)?.lastPathComponent ?? "未知文件"
-                        let fileExtension = (fileName as NSString).pathExtension.lowercased()
+                        let fileExtension = String(html[extRange]).lowercased()
                         
+                        if !blockedExtensions.contains(fileExtension) {
+                            let fileName = URL(string: url)?.lastPathComponent ?? "未知文件"
+                            links.append(DownloadLink(
+                                fileName: fileName,
+                                url: url,
+                                fileType: fileExtension
+                            ))
+                        }
+                    }
+                }
+            }
+        }
+        
+        let downloadPattern = "href=[\"']([^\"']*download[^\"']*)[\"']"
+        if let regex = try? NSRegularExpression(pattern: downloadPattern, options: .caseInsensitive) {
+            let range = NSRange(html.startIndex..., in: html)
+            let matches = regex.matches(in: html, options: [], range: range)
+            
+            for match in matches {
+                if match.numberOfRanges >= 1,
+                   let urlRange = Range(match.range(at: 1), in: html) {
+                    let url = String(html[urlRange])
+                    let fileName = URL(string: url)?.lastPathComponent ?? "未知文件"
+                    let fileExtension = (fileName as NSString).pathExtension.lowercased()
+                    
+                    if !fileExtension.isEmpty && !blockedExtensions.contains(fileExtension) && allowedPatterns.contains(fileExtension) {
                         links.append(DownloadLink(
                             fileName: fileName,
                             url: url,
