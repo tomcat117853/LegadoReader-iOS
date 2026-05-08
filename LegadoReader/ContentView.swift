@@ -68,6 +68,10 @@ struct BookshelfView: View {
     @State private var lastScrollOffset: CGFloat = 0
     @State private var sortOption: BookSortOption = .namePinyin
     @State private var showingSortOptions = false
+    @State private var filterOption: FilterOption = .all
+    @State private var showingFilterSheet = false
+    @State private var selectedAuthor: String = ""
+    @State private var selectedTag: String = ""
     
     enum BookSortOption: String, CaseIterable, Identifiable {
         case namePinyin = "按书名拼音"
@@ -89,6 +93,67 @@ struct BookshelfView: View {
         }
     }
     
+    enum FilterOption: String, CaseIterable, Identifiable {
+        case all = "全部"
+        case unread = "未读"
+        case reading = "在读"
+        case completed = "已读完"
+        
+        var id: String { rawValue }
+        
+        var icon: String {
+            switch self {
+            case .all: return "books.vertical"
+            case .unread: return "book.closed"
+            case .reading: return "book"
+            case .completed: return "checkmark.circle"
+            }
+        }
+        
+        var color: Color {
+            switch self {
+            case .all: return .blue
+            case .unread: return .orange
+            case .reading: return .green
+            case .completed: return .purple
+            }
+        }
+    }
+    
+    private var uniqueAuthors: [String] {
+        Array(Set(bookStore.books.map { $0.author })).sorted()
+    }
+    
+    private var uniqueTags: [String] {
+        let allTags = bookStore.books.compactMap { $0.kind }
+        return Array(Set(allTags)).sorted()
+    }
+    
+    private func filterBooks(_ books: [Book]) -> [Book] {
+        var filtered = books
+        
+        switch filterOption {
+        case .all:
+            break
+        case .unread:
+            filtered = filtered.filter { $0.lastReadTime == nil && $0.lastReadPosition == 0 }
+        case .reading:
+            filtered = filtered.filter { $0.lastReadTime != nil && $0.lastReadPosition > 0 }
+        case .completed:
+            filtered = filtered.filter { $0.lastReadPosition > 0 && $0.totalChapters > 0 && $0.lastReadPosition >= $0.totalChapters - 1 }
+        }
+        
+        if !selectedAuthor.isEmpty {
+            filtered = filtered.filter { $0.author == selectedAuthor }
+        }
+        
+        if !selectedTag.isEmpty {
+            filtered = filtered.filter { $0.kind == selectedTag }
+        }
+        
+        return filtered
+    }
+    
     private func sortBooks(_ books: [Book]) -> [Book] {
         switch sortOption {
         case .namePinyin:
@@ -105,15 +170,21 @@ struct BookshelfView: View {
     }
     
     private var filteredBooks: [Book] {
-        var books = searchText.isEmpty ? bookStore.books : bookStore.books.filter { book in
+        let baseBooks: [Book]
+        if searchText.isEmpty {
+            baseBooks = bookStore.books
+        } else {
             let query = searchText.lowercased()
-            return book.name.lowercased().contains(query) ||
-            book.author.lowercased().contains(query) ||
-            (book.kind?.lowercased().contains(query) ?? false) ||
-            (book.intro?.lowercased().contains(query) ?? false) ||
-            (book.sourceName.lowercased().contains(query))
+            baseBooks = bookStore.books.filter { book in
+                book.name.lowercased().contains(query) ||
+                book.author.lowercased().contains(query) ||
+                (book.kind?.lowercased().contains(query) ?? false) ||
+                (book.intro?.lowercased().contains(query) ?? false) ||
+                (book.sourceName.lowercased().contains(query))
+            }
         }
-        return sortBooks(books)
+        let filtered = filterBooks(baseBooks)
+        return sortBooks(filtered)
     }
     
     var body: some View {
@@ -125,6 +196,8 @@ struct BookshelfView: View {
                     pullOffset: scrollOffset
                 )
                 .animation(.easeInOut(duration: 0.2), value: isSearchActive)
+                
+                filterBar
                 
                 ScrollView {
                     GeometryReader { geo in
@@ -222,6 +295,99 @@ struct BookshelfView: View {
             .sheet(item: $selectedBook) { book in
                 EnhancedBookDetailView(book: book)
             }
+            .sheet(isPresented: $showingFilterSheet) {
+                FilterSheetView(
+                    filterOption: $filterOption,
+                    selectedAuthor: $selectedAuthor,
+                    selectedTag: $selectedTag,
+                    uniqueAuthors: uniqueAuthors,
+                    uniqueTags: uniqueTags
+                )
+            }
+        }
+    }
+    
+    private var filterBar: some View {
+        VStack(spacing: 0) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(FilterOption.allCases) { option in
+                        FilterChip(
+                            title: option.rawValue,
+                            icon: option.icon,
+                            color: option.color,
+                            isSelected: filterOption == option && selectedAuthor.isEmpty && selectedTag.isEmpty,
+                            count: countForFilter(option)
+                        ) {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                filterOption = option
+                                selectedAuthor = ""
+                                selectedTag = ""
+                            }
+                        }
+                    }
+                    
+                    Divider()
+                        .frame(height: 24)
+                    
+                    FilterChip(
+                        title: selectedAuthor.isEmpty ? "作者" : selectedAuthor,
+                        icon: "person.fill",
+                        color: .purple,
+                        isSelected: !selectedAuthor.isEmpty
+                    ) {
+                        showingFilterSheet = true
+                    }
+                    
+                    FilterChip(
+                        title: selectedTag.isEmpty ? "标签" : selectedTag,
+                        icon: "tag.fill",
+                        color: .orange,
+                        isSelected: !selectedTag.isEmpty
+                    ) {
+                        showingFilterSheet = true
+                    }
+                    
+                    if !selectedAuthor.isEmpty || !selectedTag.isEmpty || filterOption != .all {
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                filterOption = .all
+                                selectedAuthor = ""
+                                selectedTag = ""
+                            }
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "xmark.circle.fill")
+                                Text("清除")
+                            }
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(Color(UIColor.secondarySystemBackground))
+                            .cornerRadius(12)
+                        }
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+            }
+            .background(Color(UIColor.systemBackground))
+            
+            Divider()
+        }
+    }
+    
+    private func countForFilter(_ option: FilterOption) -> Int {
+        switch option {
+        case .all:
+            return bookStore.books.count
+        case .unread:
+            return bookStore.books.filter { $0.lastReadTime == nil && $0.lastReadPosition == 0 }.count
+        case .reading:
+            return bookStore.books.filter { $0.lastReadTime != nil && $0.lastReadPosition > 0 }.count
+        case .completed:
+            return bookStore.books.filter { $0.lastReadPosition > 0 && $0.totalChapters > 0 && $0.lastReadPosition >= $0.totalChapters - 1 }.count
         }
     }
     
@@ -289,6 +455,216 @@ struct PullToSearchView: View {
             }
         }
         .frame(height: isSearchActive ? 60 : 0)
+    }
+}
+
+struct FilterChip: View {
+    let title: String
+    let icon: String
+    let color: Color
+    var isSelected: Bool = false
+    var count: Int? = nil
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.caption)
+                Text(title)
+                    .font(.caption)
+                if let count = count, count > 0 {
+                    Text("\(count)")
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(isSelected ? Color.white.opacity(0.3) : color.opacity(0.2))
+                        .cornerRadius(8)
+                }
+            }
+            .foregroundColor(isSelected ? .white : color)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(isSelected ? color : color.opacity(0.1))
+            )
+            .overlay(
+                Capsule()
+                    .stroke(color.opacity(isSelected ? 0 : 0.3), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct FilterSheetView: View {
+    @Environment(\.dismiss) var dismiss
+    @Binding var filterOption: BookshelfView.FilterOption
+    @Binding var selectedAuthor: String
+    @Binding var selectedTag: String
+    let uniqueAuthors: [String]
+    let uniqueTags: [String]
+    
+    @State private var searchAuthor = ""
+    @State private var searchTag = ""
+    
+    var body: some View {
+        NavigationView {
+            List {
+                Section("阅读状态") {
+                    ForEach(BookshelfView.FilterOption.allCases) { option in
+                        Button(action: {
+                            filterOption = option
+                        }) {
+                            HStack {
+                                Image(systemName: option.icon)
+                                    .foregroundColor(option.color)
+                                    .frame(width: 24)
+                                Text(option.rawValue)
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                if filterOption == option && selectedAuthor.isEmpty && selectedTag.isEmpty {
+                                    Image(systemName: "checkmark")
+                                        .foregroundColor(.blue)
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                Section {
+                    HStack {
+                        Image(systemName: "person.fill")
+                            .foregroundColor(.purple)
+                        Text("按作者筛选")
+                            .font(.headline)
+                    }
+                    
+                    if !selectedAuthor.isEmpty {
+                        Button(action: {
+                            selectedAuthor = ""
+                        }) {
+                            HStack {
+                                Text("当前: \(selectedAuthor)")
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    
+                    if uniqueAuthors.isEmpty {
+                        Text("暂无作者数据")
+                            .foregroundColor(.secondary)
+                            .font(.caption)
+                    } else {
+                        ForEach(filteredAuthors, id: \.self) { author in
+                            Button(action: {
+                                selectedAuthor = author
+                            }) {
+                                HStack {
+                                    Text(author)
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    if selectedAuthor == author {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(.purple)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                Section {
+                    HStack {
+                        Image(systemName: "tag.fill")
+                            .foregroundColor(.orange)
+                        Text("按标签筛选")
+                            .font(.headline)
+                    }
+                    
+                    if !selectedTag.isEmpty {
+                        Button(action: {
+                            selectedTag = ""
+                        }) {
+                            HStack {
+                                Text("当前: \(selectedTag)")
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    
+                    if uniqueTags.isEmpty {
+                        Text("暂无标签数据")
+                            .foregroundColor(.secondary)
+                            .font(.caption)
+                    } else {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(filteredTags, id: \.self) { tag in
+                                    Button(action: {
+                                        selectedTag = tag
+                                    }) {
+                                        Text(tag)
+                                            .font(.caption)
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 6)
+                                            .background(selectedTag == tag ? Color.orange : Color.orange.opacity(0.1))
+                                            .foregroundColor(selectedTag == tag ? .white : .orange)
+                                            .cornerRadius(16)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 16)
+                                                    .stroke(Color.orange.opacity(0.3), lineWidth: selectedTag == tag ? 0 : 1)
+                                            )
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+            }
+            .listStyle(.insetGrouped)
+            .navigationTitle("筛选")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("重置") {
+                        filterOption = .all
+                        selectedAuthor = ""
+                        selectedTag = ""
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("完成") {
+                        dismiss()
+                    }
+                }
+            }
+            .searchable(text: $searchAuthor, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索作者")
+            .searchable(text: $searchTag, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索标签")
+        }
+    }
+    
+    private var filteredAuthors: [String] {
+        if searchAuthor.isEmpty {
+            return uniqueAuthors
+        }
+        return uniqueAuthors.filter { $0.lowercased().contains(searchAuthor.lowercased()) }
+    }
+    
+    private var filteredTags: [String] {
+        if searchTag.isEmpty {
+            return uniqueTags
+        }
+        return uniqueTags.filter { $0.lowercased().contains(searchTag.lowercased()) }
     }
 }
 
