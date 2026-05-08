@@ -199,6 +199,19 @@ struct SettingsView: View {
                         }
                     }
                     
+                    NavigationLink(destination: CloudStorageSettingsView()) {
+                        HStack {
+                            Image(systemName: "cloud.fill")
+                                .foregroundColor(.blue)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("云盘同步")
+                                Text("百度/阿里/WebDAV/OPDS")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    
                     NavigationLink(destination: WebDAVSettingsView()) {
                         HStack {
                             Image(systemName: "externaldrive.connected.to.line.below")
