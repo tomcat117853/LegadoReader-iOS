@@ -44,6 +44,17 @@ struct ReadingProgressView: View {
                                 .foregroundColor(.secondary)
                         }
                     }
+                    
+                    NavigationLink(destination: DurationStatisticsView()) {
+                        HStack {
+                            Image(systemName: "clock.fill")
+                                .foregroundColor(.purple)
+                            Text("时长统计")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 } header: {
                     Text("阅读进度")
                 }

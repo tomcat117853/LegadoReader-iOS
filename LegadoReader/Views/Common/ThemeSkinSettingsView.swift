@@ -1,10 +1,10 @@
 import SwiftUI
 
 struct ThemeSkinSettingsView: View {
-    @StateObject private var themeStore = ThemeStore.shared
+    @StateObject private var themeManager = UnifiedThemeManager.shared
     @State private var showingThemeDetail = false
     @State private var showingCreateTheme = false
-    @State private var selectedTheme: ThemeStore.AppTheme?
+    @State private var selectedTheme: UnifiedThemeManager.UnifiedTheme?
     
     let columns = [
         GridItem(.flexible()),
@@ -37,7 +37,7 @@ struct ThemeSkinSettingsView: View {
             HStack(spacing: 12) {
                 Button(action: {
                     withAnimation {
-                        themeStore.randomSkin()
+                        themeManager.randomSkin()
                     }
                 }) {
                     HStack {
@@ -53,7 +53,7 @@ struct ThemeSkinSettingsView: View {
                 
                 Button(action: {
                     withAnimation {
-                        themeStore.resetToDefault()
+                        themeManager.resetToDefault()
                     }
                 }) {
                     HStack {
@@ -74,7 +74,7 @@ struct ThemeSkinSettingsView: View {
                         .foregroundColor(.green)
                     Text("语言设置")
                     Spacer()
-                    Text(themeStore.currentLanguage.displayName)
+                    Text(themeManager.currentLanguage.displayName)
                         .foregroundColor(.secondary)
                     Image(systemName: "chevron.right")
                         .foregroundColor(.secondary)
@@ -92,9 +92,9 @@ struct ThemeSkinSettingsView: View {
             Label("当前主题", systemImage: "paintbrush.fill")
                 .font(.headline)
             
-            ThemePreviewCard(theme: themeStore.currentTheme, isSelected: true)
+            ThemePreviewCard(theme: themeManager.currentTheme, isSelected: true)
                 .onTapGesture {
-                    selectedTheme = themeStore.currentTheme
+                    selectedTheme = themeManager.currentTheme
                 }
         }
     }
@@ -117,20 +117,20 @@ struct ThemeSkinSettingsView: View {
             }
             
             LazyVGrid(columns: columns, spacing: 16) {
-                ForEach(themeStore.availableThemes) { theme in
+                ForEach(themeManager.availableThemes) { theme in
                     ThemeGridItem(
                         theme: theme,
-                        isSelected: theme.id == themeStore.currentTheme.id
+                        isSelected: theme.id == themeManager.currentTheme.id
                     )
                     .onTapGesture {
                         withAnimation {
-                            themeStore.changeTheme(to: theme.id)
+                            themeManager.changeTheme(to: theme.id)
                         }
                     }
                     .contextMenu {
                         if !theme.isBuiltIn {
                             Button(role: .destructive, action: {
-                                themeStore.deleteCustomTheme(theme)
+                                themeManager.deleteCustomTheme(theme)
                             }) {
                                 Label("删除", systemImage: "trash")
                             }
@@ -143,7 +143,7 @@ struct ThemeSkinSettingsView: View {
 }
 
 struct ThemePreviewCard: View {
-    let theme: ThemeStore.AppTheme
+    let theme: UnifiedThemeManager.UnifiedTheme
     var isSelected: Bool = false
     
     var body: some View {
@@ -212,7 +212,7 @@ struct ThemePreviewCard: View {
 }
 
 struct ThemeGridItem: View {
-    let theme: ThemeStore.AppTheme
+    let theme: UnifiedThemeManager.UnifiedTheme
     var isSelected: Bool = false
     
     var body: some View {
@@ -243,14 +243,14 @@ struct ThemeGridItem: View {
 
 struct ThemeDetailView: View {
     @Environment(\.dismiss) var dismiss
-    let theme: ThemeStore.AppTheme
-    @StateObject private var themeStore = ThemeStore.shared
+    let theme: UnifiedThemeManager.UnifiedTheme
+    @StateObject private var themeManager = UnifiedThemeManager.shared
     
     var body: some View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 20) {
-                    ThemePreviewCard(theme: theme, isSelected: theme.id == themeStore.currentTheme.id)
+                    ThemePreviewCard(theme: theme, isSelected: theme.id == themeManager.currentTheme.id)
                         .padding(.horizontal)
                     
                     colorSection(title: "主色调", colors: [
@@ -292,7 +292,7 @@ struct ThemeDetailView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("应用") {
-                        themeStore.changeTheme(to: theme.id)
+                        themeManager.changeTheme(to: theme.id)
                         dismiss()
                     }
                 }
@@ -357,7 +357,7 @@ struct InfoRow: View {
 
 struct CreateCustomThemeView: View {
     @Environment(\.dismiss) var dismiss
-    @StateObject private var themeStore = ThemeStore.shared
+    @StateObject private var themeManager = UnifiedThemeManager.shared
     @State private var themeName = ""
     @State private var themeNameEn = ""
     @State private var selectedColor = Color.blue
@@ -372,7 +372,7 @@ struct CreateCustomThemeView: View {
                 }
                 
                 Section("选择基准主题") {
-                    ForEach(themeStore.availableThemes.prefix(4)) { theme in
+                    ForEach(themeManager.availableThemes.prefix(4)) { theme in
                         Button(action: {
                             selectedBaseThemeId = theme.id
                         }) {
@@ -436,38 +436,38 @@ struct CreateCustomThemeView: View {
     }
     
     private func createTheme() {
-        guard let baseTheme = themeStore.availableThemes.first(where: { $0.id == selectedBaseThemeId }) else { return }
+        guard let baseTheme = themeManager.availableThemes.first(where: { $0.id == selectedBaseThemeId }) else { return }
         
         let colorHex = selectedColor.toHex() ?? "#007AFF"
         
-        let newTheme = themeStore.createCustomTheme(
+        let newTheme = themeManager.createCustomTheme(
             from: baseTheme,
             name: themeName,
             nameEn: themeNameEn.isEmpty ? themeName : themeNameEn,
             primaryColor: colorHex
         )
         
-        themeStore.changeTheme(to: newTheme.id)
+        themeManager.changeTheme(to: newTheme.id)
         dismiss()
     }
 }
 
 struct LanguageSettingsView: View {
-    @StateObject private var themeStore = ThemeStore.shared
+    @StateObject private var themeManager = UnifiedThemeManager.shared
     
     var body: some View {
         List {
-            ForEach(ThemeStore.Language.allCases, id: \.self) { language in
+            ForEach(UnifiedThemeManager.Language.allCases, id: \.self) { language in
                 Button(action: {
                     withAnimation {
-                        themeStore.setLanguage(language)
+                        themeManager.setLanguage(language)
                     }
                 }) {
                     HStack {
                         Text(language.displayName)
                             .foregroundColor(.primary)
                         Spacer()
-                        if themeStore.currentLanguage == language {
+                        if themeManager.currentLanguage == language {
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundColor(.blue)
                         }

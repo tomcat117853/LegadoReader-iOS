@@ -251,11 +251,28 @@ struct GroupDetailView: View {
                     
                     Spacer()
                     
-                    Text(groupManager.sortOption.rawValue)
+                    Text(group.getSortName())
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
                     Image(systemName: "chevron.right")
+                        .foregroundColor(.secondary)
+                }
+            }
+            
+            NavigationLink(destination: GroupLayoutSettingsView(group: group)) {
+                HStack {
+                    Image(systemName: "square.grid.2x2")
+                        .foregroundColor(.blue)
+                        .frame(width: 30)
+                    
+                    Text("布局设置")
+                        .foregroundColor(.primary)
+                    
+                    Spacer()
+                    
+                    Text(group.layoutStyle.displayName)
+                        .font(.caption)
                         .foregroundColor(.secondary)
                 }
             }

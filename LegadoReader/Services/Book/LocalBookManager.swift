@@ -157,6 +157,97 @@ class LocalBookManager: ObservableObject {
         }
     }
     
+    func importAndAddToBookshelf(from fileURL: URL, completion: @escaping (Bool) -> Void) {
+        let fileManager = FileManager.default
+        let documentDirectory = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let destinationURL = documentDirectory.appendingPathComponent(fileURL.lastPathComponent)
+        
+        do {
+            if fileManager.fileExists(atPath: destinationURL.path) {
+                try fileManager.removeItem(at: destinationURL)
+            }
+            
+            try fileManager.copyItem(at: fileURL, to: destinationURL)
+            
+            let ext = fileURL.pathExtension.lowercased()
+            let bookName = fileURL.deletingPathExtension().lastPathComponent
+            let attributes = try? fileManager.attributesOfItem(atPath: destinationURL.path)
+            let size = attributes?[.size] as? Int64 ?? 0
+            
+            let book = Book(
+                id: fileURL.lastPathComponent,
+                name: bookName,
+                author: extractAuthor(from: bookName),
+                cover: nil,
+                intro: nil,
+                kind: nil,
+                lastChapter: nil,
+                lastReadChapter: nil,
+                lastReadPosition: 0,
+                totalChapters: countChapters(in: destinationURL),
+                sourceUrl: destinationURL.path,
+                sourceName: "本地导入",
+                bookUrl: destinationURL.path,
+                isFavorite: false,
+                lastReadTime: nil,
+                addedTime: Date(),
+                updatedTime: nil
+            )
+            
+            BookStore.shared.addBook(book)
+            scanForBooks()
+            completion(true)
+        } catch {
+            print("导入书籍并添加到书架失败: \(error)")
+            completion(false)
+        }
+    }
+    
+    func importComicAndAddToBookshelf(from fileURL: URL, completion: @escaping (Bool) -> Void) {
+        let fileManager = FileManager.default
+        let documentDirectory = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let destinationURL = documentDirectory.appendingPathComponent(fileURL.lastPathComponent)
+        
+        do {
+            if fileManager.fileExists(atPath: destinationURL.path) {
+                try fileManager.removeItem(at: destinationURL)
+            }
+            
+            try fileManager.copyItem(at: fileURL, to: destinationURL)
+            
+            let bookName = fileURL.deletingPathExtension().lastPathComponent
+            let attributes = try? fileManager.attributesOfItem(atPath: destinationURL.path)
+            let size = attributes?[.size] as? Int64 ?? 0
+            
+            let book = Book(
+                id: fileURL.lastPathComponent,
+                name: bookName,
+                author: "本地漫画",
+                cover: nil,
+                intro: "从文件导入的漫画",
+                kind: "漫画",
+                lastChapter: nil,
+                lastReadChapter: nil,
+                lastReadPosition: 0,
+                totalChapters: 0,
+                sourceUrl: destinationURL.path,
+                sourceName: "本地导入",
+                bookUrl: destinationURL.path,
+                isFavorite: false,
+                lastReadTime: nil,
+                addedTime: Date(),
+                updatedTime: nil
+            )
+            
+            BookStore.shared.addBook(book)
+            scanForBooks()
+            completion(true)
+        } catch {
+            print("导入漫画并添加到书架失败: \(error)")
+            completion(false)
+        }
+    }
+    
     func deleteBook(_ book: LocalBook) {
         let fileManager = FileManager.default
         
@@ -192,7 +283,7 @@ class LocalBookManager: ObservableObject {
     private func readEPUBBook(_ book: LocalBook) -> (chapters: [String], content: String) {
         do {
             let epubData = try Data(contentsOf: URL(fileURLWithPath: book.path))
-            let epub = EPUBParser(data: epubData)
+            let epub = LocalEPUBParser(data: epubData)
             return try epub.parse()
         } catch {
             print("EPUB解析失败: \(error)")
@@ -292,7 +383,7 @@ class LocalBookManager: ObservableObject {
     }
 }
 
-class EPUBParser {
+class LocalEPUBParser {
     private let data: Data
     
     init(data: Data) {

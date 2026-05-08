@@ -1,5 +1,27 @@
 import SwiftUI
 
+enum BookDetailSheet: Identifiable {
+    case reader
+    case chapterList
+    case editInfo
+    case coverPicker
+    case groupSelector
+    case groupDetail(BookGroup)
+    case share
+    
+    var id: String {
+        switch self {
+        case .reader: return "reader"
+        case .chapterList: return "chapterList"
+        case .editInfo: return "editInfo"
+        case .coverPicker: return "coverPicker"
+        case .groupSelector: return "groupSelector"
+        case .groupDetail(let group): return "groupDetail_\(group.id)"
+        case .share: return "share"
+        }
+    }
+}
+
 struct EnhancedBookDetailView: View {
     @StateObject private var bookStore = BookStore.shared
     @StateObject private var groupManager = BookGroupManager.shared
@@ -9,15 +31,9 @@ struct EnhancedBookDetailView: View {
     @State private var book: Book
     @State private var chapters: [Chapter] = []
     @State private var isLoading = false
-    @State private var showingReader = false
-    @State private var showingChapterList = false
-    @State private var showingGroupSelector = false
-    @State private var showingEditSheet = false
-    @State private var showingCoverPicker = false
-    @State private var showingDeleteAlert = false
-    @State private var showingShareSheet = false
-    @State private var showingGroupDetail: BookGroup?
     @State private var currentCover: UIImage?
+    @State private var activeSheet: BookDetailSheet?
+    @State private var showingDeleteAlert = false
     
     init(book: Book) {
         self._book = State(initialValue: book)
@@ -46,21 +62,21 @@ struct EnhancedBookDetailView: View {
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
-                        Button(action: { showingEditSheet = true }) {
+                        Button(action: { activeSheet = .editInfo }) {
                             Label("编辑信息", systemImage: "pencil")
                         }
                         
-                        Button(action: { showingCoverPicker = true }) {
+                        Button(action: { activeSheet = .coverPicker }) {
                             Label("更换封面", systemImage: "photo")
                         }
                         
-                        Button(action: { showingGroupSelector = true }) {
+                        Button(action: { activeSheet = .groupSelector }) {
                             Label("分组管理", systemImage: "folder.badge.plus")
                         }
                         
                         Divider()
                         
-                        Button(action: { showingShareSheet = true }) {
+                        Button(action: { activeSheet = .share }) {
                             Label("分享书籍", systemImage: "square.and.arrow.up")
                         }
                         
@@ -74,25 +90,8 @@ struct EnhancedBookDetailView: View {
                     }
                 }
             }
-            .sheet(isPresented: $showingReader) {
-                if let source = sourceStore.bookSources.first(where: { $0.url == book.sourceUrl }) {
-                    ReaderView(book: book, source: source)
-                }
-            }
-            .sheet(isPresented: $showingChapterList) {
-                ChapterListView(book: book, chapters: chapters)
-            }
-            .sheet(isPresented: $showingEditSheet) {
-                BookEditSheet(book: $book)
-            }
-            .sheet(isPresented: $showingCoverPicker) {
-                CoverManagementView(book: book)
-            }
-            .sheet(isPresented: $showingGroupSelector) {
-                GroupSelectorSheet(bookId: book.id)
-            }
-            .sheet(item: $showingGroupDetail) { group in
-                GroupDetailView(group: group)
+            .sheet(item: $activeSheet) { sheet in
+                sheetContent(for: sheet)
             }
             .alert("确认删除", isPresented: $showingDeleteAlert) {
                 Button("取消", role: .cancel) {}
@@ -106,6 +105,28 @@ struct EnhancedBookDetailView: View {
                 loadChapters()
                 loadCover()
             }
+        }
+    }
+    
+    @ViewBuilder
+    private func sheetContent(for sheet: BookDetailSheet) -> some View {
+        switch sheet {
+        case .reader:
+            if let source = sourceStore.bookSources.first(where: { $0.url == book.sourceUrl }) {
+                UniversalReaderView(readerMode: .networkBook(book: book, source: source))
+            }
+        case .chapterList:
+            ChapterListView(book: book, chapters: chapters)
+        case .editInfo:
+            BookEditSheet(book: $book)
+        case .coverPicker:
+            CoverManagementView(book: book)
+        case .groupSelector:
+            GroupSelectorSheet(bookId: book.id)
+        case .groupDetail(let group):
+            GroupDetailView(group: group)
+        case .share:
+            ShareSheet(items: [book.name])
         }
     }
     
@@ -151,7 +172,7 @@ struct EnhancedBookDetailView: View {
                 }
                 .shadow(radius: 4)
                 .onTapGesture {
-                    showingCoverPicker = true
+                    activeSheet = .coverPicker
                 }
                 
                 VStack(alignment: .leading, spacing: 8) {
@@ -234,7 +255,7 @@ struct EnhancedBookDetailView: View {
     private var actionButtonsSection: some View {
         VStack(spacing: 12) {
             HStack(spacing: 12) {
-                Button(action: { showingReader = true }) {
+                Button(action: { activeSheet = .reader }) {
                     HStack {
                         Image(systemName: book.progress > 0 ? "book.open" : "book.fill")
                         Text(book.progress > 0 ? "继续阅读" : "开始阅读")
@@ -247,7 +268,7 @@ struct EnhancedBookDetailView: View {
                     .cornerRadius(8)
                 }
                 
-                Button(action: { showingChapterList = true }) {
+                Button(action: { activeSheet = .chapterList }) {
                     HStack {
                         Image(systemName: "list.bullet")
                         Text("目录")
@@ -262,7 +283,7 @@ struct EnhancedBookDetailView: View {
             }
             
             HStack(spacing: 12) {
-                Button(action: { showingGroupSelector = true }) {
+                Button(action: { activeSheet = .groupSelector }) {
                     HStack {
                         Image(systemName: "folder.badge.plus")
                         Text("分组")
@@ -275,7 +296,7 @@ struct EnhancedBookDetailView: View {
                     .cornerRadius(8)
                 }
                 
-                Button(action: { showingEditSheet = true }) {
+                Button(action: { activeSheet = .editInfo }) {
                     HStack {
                         Image(systemName: "pencil")
                         Text("编辑")
@@ -327,7 +348,7 @@ struct EnhancedBookDetailView: View {
                 Spacer()
                 
                 Button("管理") {
-                    showingGroupSelector = true
+                    activeSheet = .groupSelector
                 }
                 .font(.system(size: 14))
                 .foregroundColor(.blue)
@@ -355,7 +376,7 @@ struct EnhancedBookDetailView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
                         ForEach(bookGroups) { group in
-                            Button(action: { showingGroupDetail = group }) {
+                            Button(action: { activeSheet = .groupDetail(group) }) {
                                 VStack(spacing: 8) {
                                     ZStack {
                                         RoundedRectangle(cornerRadius: 8)
@@ -400,43 +421,47 @@ struct EnhancedBookDetailView: View {
                 
                 Spacer()
                 
-                Text("\(chapters.count) 章")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                Button("查看全部") {
+                    activeSheet = .chapterList
+                }
+                .font(.system(size: 14))
+                .foregroundColor(.blue)
             }
             
             VStack(spacing: 0) {
-                ForEach(chapters.prefix(10)) { chapter in
-                    Button(action: { showingReader = true }) {
+                ForEach(Array(chapters.prefix(5))) { chapter in
+                    Button(action: {
+                        bookStore.updateReadingProgress(
+                            bookId: book.id,
+                            chapterIndex: chapters.firstIndex(where: { $0.id == chapter.id }) ?? 0,
+                            progress: 0
+                        )
+                        activeSheet = .reader
+                    }) {
                         HStack {
                             Text(chapter.title)
-                                .font(.system(size: 15))
+                                .font(.system(size: 14))
                                 .foregroundColor(.primary)
                                 .lineLimit(1)
                             
                             Spacer()
                             
-                            if chapter.isLoaded {
-                                Image(systemName: "checkmark.circle.fill")
+                            if let readChapters = book.readChapters, readChapters.contains(chapter.id) {
+                                Image(systemName: "checkmark")
+                                    .font(.caption)
                                     .foregroundColor(.green)
                             }
+                            
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
                         .padding(.vertical, 12)
-                        .padding(.horizontal)
+                        .padding(.horizontal, 16)
                     }
                     
-                    if chapter.id != chapters.prefix(10).last?.id {
+                    if chapter.id != chapters.prefix(5).last?.id {
                         Divider()
-                    }
-                }
-                
-                if chapters.count > 10 {
-                    Button(action: { showingChapterList = true }) {
-                        Text("查看全部 \(chapters.count) 章")
-                            .font(.system(size: 15))
-                            .foregroundColor(.blue)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
                     }
                 }
             }
@@ -448,9 +473,10 @@ struct EnhancedBookDetailView: View {
     private func infoRow(label: String, value: String) -> some View {
         HStack {
             Text(label)
-                .font(.caption)
+                .font(.system(size: 14))
                 .foregroundColor(.secondary)
                 .frame(width: 60, alignment: .leading)
+            
             Text(value)
                 .font(.system(size: 14))
                 .foregroundColor(.primary)
@@ -458,23 +484,42 @@ struct EnhancedBookDetailView: View {
     }
     
     private func loadChapters() {
-        guard let source = sourceStore.bookSources.first(where: { $0.url == book.sourceUrl }) else { return }
+        guard let source = sourceStore.bookSources.first(where: { $0.url == book.sourceUrl }) else {
+            return
+        }
         
         isLoading = true
         Task {
-            await bookStore.loadChapters(for: book, source: source)
-            await MainActor.run {
-                chapters = bookStore.chapters
-                isLoading = false
+            do {
+                let fetchedChapters = try await BookSourceParser.shared.fetchChapters(
+                    bookUrl: book.url,
+                    source: source
+                )
+                await MainActor.run {
+                    self.chapters = fetchedChapters
+                    self.isLoading = false
+                }
+            } catch {
+                print("Failed to load chapters: \(error)")
+                await MainActor.run {
+                    self.isLoading = false
+                }
             }
         }
     }
     
     private func loadCover() {
-        Task {
-            if let image = await CoverManager.shared.fetchCoverImage(for: book) {
-                await MainActor.run {
-                    currentCover = image
+        if let coverUrl = book.cover, let url = URL(string: coverUrl) {
+            Task {
+                do {
+                    let (data, _) = try await URLSession.shared.data(from: url)
+                    if let image = UIImage(data: data) {
+                        await MainActor.run {
+                            self.currentCover = image
+                        }
+                    }
+                } catch {
+                    print("Failed to load cover: \(error)")
                 }
             }
         }
@@ -482,236 +527,16 @@ struct EnhancedBookDetailView: View {
     
     private func deleteBook() {
         bookStore.removeBook(book)
-        groupManager.removeBookFromAllGroups(book.id)
         dismiss()
     }
 }
 
-struct BookEditSheet: View {
-    @Environment(\.dismiss) var dismiss
-    @Binding var book: Book
-    @State private var editedBook: Book
+struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
     
-    init(book: Binding<Book>) {
-        self._book = book
-        self._editedBook = State(initialValue: book.wrappedValue)
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
     }
     
-    var body: some View {
-        NavigationView {
-            Form {
-                Section {
-                    HStack {
-                        Text("书名")
-                        Spacer()
-                        TextField("书名", text: $editedBook.name)
-                            .multilineTextAlignment(.trailing)
-                            .foregroundColor(.primary)
-                    }
-                    
-                    HStack {
-                        Text("作者")
-                        Spacer()
-                        TextField("作者", text: $editedBook.author)
-                            .multilineTextAlignment(.trailing)
-                            .foregroundColor(.primary)
-                    }
-                } header: {
-                    Text("基本信息")
-                }
-                
-                Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("简介")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        TextField("简介", text: Binding(
-                            get: { editedBook.intro ?? "" },
-                            set: { editedBook.intro = $0.isEmpty ? nil : $0 }
-                        ), axis: .vertical)
-                        .lineLimit(3...6)
-                    }
-                } header: {
-                    Text("简介")
-                }
-                
-                Section {
-                    Toggle("收藏", isOn: $editedBook.isFavorite)
-                        .tint(.orange)
-                } header: {
-                    Text("状态")
-                }
-            }
-            .navigationTitle("编辑书籍")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("取消") {
-                        dismiss()
-                    }
-                }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("保存") {
-                        book = editedBook
-                        BookStore.shared.updateBook(editedBook)
-                        dismiss()
-                    }
-                    .fontWeight(.semibold)
-                }
-            }
-        }
-    }
-}
-
-struct GroupSelectorSheet: View {
-    @Environment(\.dismiss) var dismiss
-    @StateObject private var groupManager = BookGroupManager.shared
-    @StateObject private var bookStore = BookStore.shared
-    @State private var selectedGroups: Set<String> = []
-    @State private var showingNewGroupSheet = false
-    
-    let bookId: String
-    
-    init(bookId: String) {
-        self.bookId = bookId
-    }
-    
-    var body: some View {
-        NavigationView {
-            List {
-                ForEach(groupManager.groups) { group in
-                    Button(action: { toggleGroup(group) }) {
-                        HStack {
-                            Image(systemName: group.icon)
-                                .foregroundColor(.blue)
-                                .frame(width: 30)
-                            
-                            VStack(alignment: .leading) {
-                                Text(group.name)
-                                    .foregroundColor(.primary)
-                                
-                                if !group.description.isNilOrEmpty {
-                                    Text(group.description ?? "")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                            
-                            Spacer()
-                            
-                            if selectedGroups.contains(group.id) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.blue)
-                            } else {
-                                Image(systemName: "circle")
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                    .disabled(group.isHidden)
-                }
-            }
-            .listStyle(.plain)
-            .navigationTitle("分组管理")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("关闭") {
-                        dismiss()
-                    }
-                }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { showingNewGroupSheet = true }) {
-                        Image(systemName: "plus")
-                    }
-                }
-            }
-            .onAppear {
-                loadSelectedGroups()
-            }
-            .sheet(isPresented: $showingNewGroupSheet) {
-                NewGroupSheet()
-            }
-        }
-    }
-    
-    private func loadSelectedGroups() {
-        selectedGroups = Set(groupManager.getGroupsForBook(bookId).map { $0.id })
-    }
-    
-    private func toggleGroup(_ group: BookGroup) {
-        if selectedGroups.contains(group.id) {
-            selectedGroups.remove(group.id)
-            groupManager.removeBook(bookId, from: group.id)
-        } else {
-            selectedGroups.insert(group.id)
-            groupManager.addBook(bookId, to: group.id)
-        }
-    }
-}
-
-struct NewGroupSheet: View {
-    @Environment(\.dismiss) var dismiss
-    @StateObject private var groupManager = BookGroupManager.shared
-    @State private var groupName = ""
-    @State private var selectedIcon = "folder.fill"
-    @State private var showingIconPicker = false
-    
-    var body: some View {
-        NavigationView {
-            Form {
-                Section {
-                    HStack {
-                        Text("名称")
-                        Spacer()
-                        TextField("分组名称", text: $groupName)
-                            .multilineTextAlignment(.trailing)
-                            .foregroundColor(.primary)
-                    }
-                    
-                    HStack {
-                        Text("图标")
-                        Spacer()
-                        Button(action: { showingIconPicker = true }) {
-                            HStack {
-                                Image(systemName: selectedIcon)
-                                    .foregroundColor(.blue)
-                                Text("选择图标")
-                                    .foregroundColor(.blue)
-                            }
-                        }
-                    }
-                }
-            }
-            .navigationTitle("新建分组")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("取消") {
-                        dismiss()
-                    }
-                }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("创建") {
-                        groupManager.addGroup(name: groupName, icon: selectedIcon)
-                        dismiss()
-                    }
-                    .fontWeight(.semibold)
-                    .disabled(groupName.isEmpty)
-                }
-            }
-            .sheet(isPresented: $showingIconPicker) {
-                IconPickerSheet(selectedIcon: $selectedIcon)
-            }
-        }
-    }
-}
-
-extension Optional where Wrapped == String {
-    var isNilOrEmpty: Bool {
-        return self?.isEmpty ?? true
-    }
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }

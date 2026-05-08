@@ -125,16 +125,6 @@ class BookFormatManager: ObservableObject {
                 isBinary: false
             ),
             BookFormat(
-                id: "docx",
-                name: "Word文档",
-                extensions: ["docx"],
-                mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                description: "Microsoft Word 2007+ 文档格式",
-                supportsMetadata: true,
-                supportsImages: true,
-                isBinary: true
-            ),
-            BookFormat(
                 id: "zip",
                 name: "ZIP压缩",
                 extensions: ["zip"],
@@ -163,86 +153,12 @@ class BookFormatManager: ObservableObject {
                 supportsMetadata: false,
                 supportsImages: true,
                 isBinary: true
-            ),
-            BookFormat(
-                id: "7z",
-                name: "7Z压缩",
-                extensions: ["7z"],
-                mimeType: "application/x-7z-compressed",
-                description: "7-Zip高压缩比格式",
-                supportsMetadata: false,
-                supportsImages: false,
-                isBinary: true
-            ),
-            BookFormat(
-                id: "tar",
-                name: "TAR归档",
-                extensions: ["tar"],
-                mimeType: "application/x-tar",
-                description: "Unix磁带归档格式",
-                supportsMetadata: false,
-                supportsImages: false,
-                isBinary: true
-            ),
-            BookFormat(
-                id: "targz",
-                name: "TAR.GZ压缩",
-                extensions: ["tar.gz", "tgz"],
-                mimeType: "application/gzip",
-                description: "Gzip压缩的TAR归档",
-                supportsMetadata: false,
-                supportsImages: false,
-                isBinary: true
-            ),
-            BookFormat(
-                id: "tarbz2",
-                name: "TAR.BZ2压缩",
-                extensions: ["tar.bz2", "tbz2"],
-                mimeType: "application/x-bzip2",
-                description: "Bzip2压缩的TAR归档",
-                supportsMetadata: false,
-                supportsImages: false,
-                isBinary: true
-            ),
-            BookFormat(
-                id: "tarxz",
-                name: "TAR.XZ压缩",
-                extensions: ["tar.xz"],
-                mimeType: "application/x-xz",
-                description: "XZ压缩的TAR归档",
-                supportsMetadata: false,
-                supportsImages: false,
-                isBinary: true
-            ),
-            BookFormat(
-                id: "xz",
-                name: "XZ压缩",
-                extensions: ["xz"],
-                mimeType: "application/x-xz",
-                description: "XZ压缩格式",
-                supportsMetadata: false,
-                supportsImages: false,
-                isBinary: true
             )
         ]
     }
     
     func detectFormat(_ filename: String) -> BookFormat? {
         let lowerFilename = filename.lowercased()
-        
-        if lowerFilename.hasSuffix(".tar.gz") || lowerFilename.hasSuffix(".tgz") {
-            return supportedFormats.first { $0.id == "targz" }
-        } else if lowerFilename.hasSuffix(".tar.bz2") || lowerFilename.hasSuffix(".tbz2") {
-            return supportedFormats.first { $0.id == "tarbz2" }
-        } else if lowerFilename.hasSuffix(".tar.xz") {
-            return supportedFormats.first { $0.id == "tarxz" }
-        } else if lowerFilename.hasSuffix(".tar") {
-            return supportedFormats.first { $0.id == "tar" }
-        } else if lowerFilename.hasSuffix(".7z") {
-            return supportedFormats.first { $0.id == "7z" }
-        } else if lowerFilename.hasSuffix(".xz") {
-            return supportedFormats.first { $0.id == "xz" }
-        }
         
         for format in supportedFormats {
             if format.matchesExtension(lowerFilename) {
@@ -283,26 +199,6 @@ class BookFormatManager: ObservableObject {
             return supportedFormats.first { $0.id == "zip" }
         }
         
-        if data.has7ZHeader {
-            return supportedFormats.first { $0.id == "7z" }
-        }
-        
-        if data.hasXZHeader {
-            return supportedFormats.first { $0.id == "xz" }
-        }
-        
-        if data.hasBZIP2Header {
-            return supportedFormats.first { $0.id == "tarbz2" }
-        }
-        
-        if data.hasGZIPHeader {
-            return supportedFormats.first { $0.id == "targz" }
-        }
-        
-        if data.hasTARHeader {
-            return supportedFormats.first { $0.id == "tar" }
-        }
-        
         if data.isPlainText {
             return supportedFormats.first { $0.id == "txt" }
         }
@@ -318,49 +214,106 @@ class BookFormatManager: ObservableObject {
         return detectFormat(from: data) != nil
     }
     
-    func getReader(for format: BookFormat) -> BookReaderProtocol? {
-        switch format.id {
+    func getReader(for formatId: String) -> LazyBookProtocol? {
+        switch formatId {
         case "epub":
-            return EPUBReader()
+            return LazyEPUBBook(id: "temp_\(UUID().uuidString)", data: Data())
         case "pdf":
-            return PDFReader()
+            return LazyPDFBook(id: "temp_\(UUID().uuidString)", data: Data())
         case "mobi", "azw":
-            return MOBIReader()
+            return LazyAZWBook(id: "temp_\(UUID().uuidString)", data: Data())
         case "fb2":
-            return FB2Reader()
+            return LazyFB2Book(id: "temp_\(UUID().uuidString)", data: Data())
         case "txt":
-            return TXTReader()
+            return LazyTXTBook(id: "temp_\(UUID().uuidString)", data: Data())
         case "chm":
-            return CHMReader()
+            return LazyCHMBook(id: "temp_\(UUID().uuidString)", data: Data())
         case "rtf":
-            return RTFReader()
+            return LazyRTFBook(id: "temp_\(UUID().uuidString)", data: Data())
         case "html":
-            return HTMLReader()
-        case "docx":
-            return DOCXReader()
-        case "7z", "tar", "targz", "tarbz2", "tarxz", "xz":
-            return BookArchiveReader()
+            return LazyHTMLBook(id: "temp_\(UUID().uuidString)", data: Data())
         default:
             return nil
         }
     }
     
+    func loadBook(data: Data, format: BookFormat) async throws -> LazyBookProtocol? {
+        let formatId = format.id
+        guard let book = getReader(for: formatId) else { return nil }
+        
+        let tempId = "temp_\(UUID().uuidString)"
+        let lazyBook: LazyBookProtocol
+        
+        switch formatId {
+        case "epub":
+            lazyBook = LazyEPUBBook(id: tempId, data: data)
+        case "pdf":
+            lazyBook = LazyPDFBook(id: tempId, data: data)
+        case "mobi", "azw":
+            lazyBook = LazyAZWBook(id: tempId, data: data)
+        case "fb2":
+            lazyBook = LazyFB2Book(id: tempId, data: data)
+        case "txt":
+            lazyBook = LazyTXTBook(id: tempId, data: data)
+        case "chm":
+            lazyBook = LazyCHMBook(id: tempId, data: data)
+        case "rtf":
+            lazyBook = LazyRTFBook(id: tempId, data: data)
+        case "html":
+            lazyBook = LazyHTMLBook(id: tempId, data: data)
+        default:
+            return nil
+        }
+        
+        try await lazyBook.loadMetadata()
+        return lazyBook
+    }
+    
     func convert(_ data: Data, from sourceFormat: BookFormat, to targetFormat: BookFormat) async throws -> Data {
-        let reader = getReader(for: sourceFormat)
-        let content = try await reader?.read(data: data) ?? BookContent()
+        guard let book = try await loadBook(data: data, format: sourceFormat) else {
+            throw ConversionError.unsupportedFormat
+        }
+        
+        var content = BookContent()
+        content.title = book.bookTitle
+        content.author = book.bookAuthor
+        
+        for i in 0..<book.chaptersCount {
+            if let chapter = try? await book.loadChapter(at: i) {
+                content.chapters.append(BookChapter(
+                    title: chapter.title,
+                    content: chapter.content,
+                    level: 1
+                ))
+            }
+        }
         
         let converter = BookConverter()
         return try await converter.convert(content, to: targetFormat)
     }
     
     func extractCover(data: Data, format: BookFormat) -> Data? {
-        let reader = getReader(for: format)
-        return reader?.extractCover(data: data)
+        Task {
+            if let book = try? await loadBook(data: data, format: format) {
+                return book.coverImage
+            }
+        }
+        return nil
     }
     
     func getMetadata(data: Data, format: BookFormat) -> BookMetadata {
-        let reader = getReader(for: format)
-        return reader?.getMetadata(data: data) ?? BookMetadata()
+        Task {
+            if let book = try? await loadBook(data: data, format: format) {
+                return BookMetadata(
+                    title: book.bookTitle,
+                    author: book.bookAuthor,
+                    publisher: "",
+                    description: "",
+                    language: ""
+                )
+            }
+        }
+        return BookMetadata()
     }
     
     func listSupportedFormats() -> [BookFormat] {
@@ -387,11 +340,9 @@ class BookFormatManager: ObservableObject {
     }
 }
 
-protocol BookReaderProtocol {
-    func read(data: Data) async throws -> BookContent
-    func extractCover(data: Data) -> Data?
-    func getMetadata(data: Data) -> BookMetadata
-    func getTableOfContents(data: Data) -> [BookChapter]
+enum ConversionError: Error {
+    case unsupportedFormat
+    case conversionFailed
 }
 
 struct BookContent {
@@ -570,36 +521,6 @@ extension Data {
         if count < 4 { return false }
         let signature = [UInt8](prefix(4))
         return signature == [0x50, 0x4B, 0x03, 0x04]
-    }
-    
-    var has7ZHeader: Bool {
-        if count < 6 { return false }
-        let signature = [UInt8](prefix(6))
-        return signature == [0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C]
-    }
-    
-    var hasTARHeader: Bool {
-        if count < 262 { return false }
-        let data = self[257..<262]
-        return data == "ustar".data(using: .ascii)!
-    }
-    
-    var hasGZIPHeader: Bool {
-        if count < 2 { return false }
-        let signature = [UInt8](prefix(2))
-        return signature == [0x1F, 0x8B]
-    }
-    
-    var hasBZIP2Header: Bool {
-        if count < 3 { return false }
-        let signature = [UInt8](prefix(3))
-        return signature == [0x42, 0x5A, 0x68]
-    }
-    
-    var hasXZHeader: Bool {
-        if count < 6 { return false }
-        let signature = [UInt8](prefix(6))
-        return signature == [0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00]
     }
     
     var isPlainText: Bool {

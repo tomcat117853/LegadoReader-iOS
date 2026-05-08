@@ -307,52 +307,6 @@ struct UpdateHistoryView: View {
     }
 }
 
-struct UpdateNotificationBannerView: View {
-    @ObservedObject var notificationManager = UpdateNotificationManager.shared
-    @State private var showingNotifications = false
-    
-    var body: some View {
-        if notificationManager.getUnreadCount() > 0 {
-            HStack {
-                Image(systemName: "bell.badge.fill")
-                    .foregroundColor(.red)
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("\(notificationManager.getUnreadCount()) 本书有更新")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                    
-                    Text(notificationManager.getUnreadUpdates().first?.bookName ?? "")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                }
-                
-                Spacer()
-                
-                Button(action: {
-                    showingNotifications = true
-                }) {
-                    Text("查看")
-                        .font(.subheadline)
-                        .foregroundColor(.blue)
-                }
-            }
-            .padding()
-            .background(Color(.systemBackground))
-            .cornerRadius(12)
-            .shadow(radius: 5)
-            .padding()
-            .onTapGesture {
-                showingNotifications = true
-            }
-            .sheet(isPresented: $showingNotifications) {
-                UpdateHistoryView()
-            }
-        }
-    }
-}
-
 struct UpdateNotificationSettingsView_Previews: PreviewProvider {
     static var previews: some View {
         UpdateNotificationSettingsView()

@@ -15,16 +15,12 @@ struct SettingsView: View {
                         Label("阅读界面设置", systemImage: "textformat.size")
                     }
                     
-                    NavigationLink(destination: ThemeSettingsView()) {
-                        Label("主题设置", systemImage: "palette")
-                    }
-                    
                     NavigationLink(destination: ThemeSkinSettingsView()) {
                         HStack {
-                            Image(systemName: "wand.and.stars")
+                            Image(systemName: "palette")
                                 .foregroundColor(.purple)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("一键换肤")
+                                Text("主题设置")
                                 Text("切换全局主题外观")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
@@ -48,6 +44,19 @@ struct SettingsView: View {
                         }
                     }
                     
+                    NavigationLink(destination: FontMappingSettingsView()) {
+                        HStack {
+                            Image(systemName: "textformat")
+                                .foregroundColor(.green)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("字体映射")
+                                Text("自定义字符范围的显示字体")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    
                     NavigationLink(destination: ComicReadingSettingsView()) {
                         HStack {
                             Image(systemName: "books.vertical.fill")
@@ -61,13 +70,13 @@ struct SettingsView: View {
                         }
                     }
                     
-                    NavigationLink(destination: ImageGroupComicView()) {
+                    NavigationLink(destination: CustomAudioSourceSettingsView()) {
                         HStack {
-                            Image(systemName: "photo.on.rectangle.angled")
+                            Image(systemName: "waveform")
                                 .foregroundColor(.purple)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("图片组漫画")
-                                Text("导入照片或文件夹作为漫画阅读")
+                                Text("听书源设置")
+                                Text("自定义在线TTS语音源")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
@@ -186,6 +195,19 @@ struct SettingsView: View {
                                 Circle()
                                     .fill(Color.green)
                                     .frame(width: 8, height: 8)
+                            }
+                        }
+                    }
+                    
+                    NavigationLink(destination: CloudStorageSettingsView()) {
+                        HStack {
+                            Image(systemName: "cloud.fill")
+                                .foregroundColor(.blue)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("云盘同步")
+                                Text("百度/阿里/WebDAV/OPDS")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
                             }
                         }
                     }

@@ -11,9 +11,11 @@ class ComicParserManager: BaseService, ObservableObject {
     @Published var currentComic: ComicBook?
     @Published var currentPage: Int = 0
     @Published var pageCount: Int = 0
+    @Published var savedComics: [ComicBook] = []
     
     private var extractedImages: [UIImage] = []
     private var extractedPath: URL?
+    private let savedComicsKey = "ComicParserManager_savedComics"
     
     struct ComicBook: Identifiable, Codable {
         let id: String
@@ -34,11 +36,6 @@ class ComicParserManager: BaseService, ObservableObject {
             case cb7 = "cb7"
             case pdf = "pdf"
             case folder = "folder"
-            case tar = "tar"
-            case tarGz = "tar.gz"
-            case tarBz2 = "tar.bz2"
-            case tarXz = "tar.xz"
-            case xz = "xz"
             
             var displayName: String {
                 switch self {
@@ -47,11 +44,6 @@ class ComicParserManager: BaseService, ObservableObject {
                 case .cb7: return "CB7 (7z)"
                 case .pdf: return "PDF"
                 case .folder: return "文件夹"
-                case .tar: return "TAR"
-                case .tarGz: return "TAR.GZ"
-                case .tarBz2: return "TAR.BZ2"
-                case .tarXz: return "TAR.XZ"
-                case .xz: return "XZ"
                 }
             }
             
@@ -62,14 +54,7 @@ class ComicParserManager: BaseService, ObservableObject {
                 case .cb7: return "7.square"
                 case .pdf: return "doc.richtext"
                 case .folder: return "folder.fill"
-                case .tar: return "doc.badge.gearshape"
-                case .tarGz, .tarBz2, .tarXz: return "archivebox"
-                case .xz: return "archivebox"
                 }
-            }
-            
-            var isSupported: Bool {
-                return true
             }
         }
     }
@@ -83,6 +68,39 @@ class ComicParserManager: BaseService, ObservableObject {
     
     private override init() {
         super.init()
+        loadSavedComics()
+    }
+    
+    private func loadSavedComics() {
+        if let data = UserDefaults.standard.data(forKey: savedComicsKey),
+           let comics = try? JSONDecoder().decode([ComicBook].self, from: data) {
+            savedComics = comics
+        }
+    }
+    
+    private func saveComics() {
+        if let data = try? JSONEncoder().encode(savedComics) {
+            UserDefaults.standard.set(data, forKey: savedComicsKey)
+        }
+    }
+    
+    func addComic(_ comic: ComicBook) {
+        if !savedComics.contains(where: { $0.id == comic.id }) {
+            savedComics.append(comic)
+            saveComics()
+        }
+    }
+    
+    func removeComic(_ comic: ComicBook) {
+        savedComics.removeAll { $0.id == comic.id }
+        saveComics()
+    }
+    
+    func updateComic(_ comic: ComicBook) {
+        if let index = savedComics.firstIndex(where: { $0.id == comic.id }) {
+            savedComics[index] = comic
+            saveComics()
+        }
     }
     
     func parseComic(at url: URL) async throws -> ComicBook {
@@ -105,46 +123,26 @@ class ComicParserManager: BaseService, ObservableObject {
         case .cbr:
             return try await parseCBR(at: url)
         case .cb7:
-            return try await parse7Z(at: url)
+            return try await parseCB7(at: url)
         case .pdf:
             return try await parsePDF(at: url)
         case .folder:
             return try await parseFolder(at: url)
-        case .tar:
-            return try await parseTAR(at: url)
-        case .tarGz:
-            return try await parseTAR(at: url)
-        case .tarBz2:
-            return try await parseTAR(at: url)
-        case .tarXz:
-            return try await parseTAR(at: url)
-        case .xz:
-            return try await parseXZ(at: url)
         }
     }
     
     private func detectFormat(url: URL) -> ComicBook.ComicFormat {
-        let filename = url.lastPathComponent.lowercased()
-        
-        if filename.hasSuffix(".tar.gz") || filename.hasSuffix(".tgz") {
-            return .tarGz
-        } else if filename.hasSuffix(".tar.bz2") || filename.hasSuffix(".tbz2") {
-            return .tarBz2
-        } else if filename.hasSuffix(".tar.xz") {
-            return .tarXz
-        } else if filename.hasSuffix(".xz") {
-            return .xz
-        } else if filename.hasSuffix(".tar") {
-            return .tar
-        } else if filename.hasSuffix(".cbz") || filename.hasSuffix(".zip") {
+        let ext = url.pathExtension.lowercased()
+        switch ext {
+        case "cbz", "zip":
             return .cbz
-        } else if filename.hasSuffix(".cbr") || filename.hasSuffix(".rar") {
+        case "cbr", "rar":
             return .cbr
-        } else if filename.hasSuffix(".cb7") || filename.hasSuffix(".7z") {
+        case "cb7", "7z":
             return .cb7
-        } else if filename.hasSuffix(".pdf") {
+        case "pdf":
             return .pdf
-        } else {
+        default:
             return .folder
         }
     }
@@ -221,181 +219,42 @@ class ComicParserManager: BaseService, ObservableObject {
         return comic
     }
     
-    private func parse7Z(at url: URL) async throws -> ComicBook {
+    private func parseCB7(at url: URL) async throws -> ComicBook {
         let tempDir = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try fileManager.createDirectory(at: tempDir, withIntermediateDirectories: true)
         
-        do {
-            let extractedFiles = try await ArchiveManager.shared.extractArchive(at: url, to: tempDir)
-            
-            let images = extractImages(from: tempDir)
-            let coverData = images.first?.jpegData(compressionQuality: 0.8)
-            
-            let comic = ComicBook(
-                id: UUID().uuidString,
-                title: url.deletingPathExtension().lastPathComponent,
-                author: nil,
-                pageCount: images.count,
-                format: .cb7,
-                sourcePath: url.path,
-                coverImage: coverData,
-                extractedPath: tempDir.path,
-                createdAt: Date(),
-                lastReadPage: 0,
-                lastReadTime: nil
-            )
-            
-            extractedImages = images
-            extractedPath = tempDir
-            pageCount = images.count
-            
-            await MainActor.run {
-                currentComic = comic
-            }
-            
-            return comic
-        } catch {
-            try? fileManager.removeItem(at: tempDir)
-            let images = extractImagesFromArchive(at: url) ?? []
-            
-            if images.isEmpty {
-                throw ComicError.extractionFailed
-            }
-            
-            let coverData = images.first?.jpegData(compressionQuality: 0.8)
-            
-            let comic = ComicBook(
-                id: UUID().uuidString,
-                title: url.deletingPathExtension().lastPathComponent,
-                author: nil,
-                pageCount: images.count,
-                format: .cb7,
-                sourcePath: url.path,
-                coverImage: coverData,
-                extractedPath: nil,
-                createdAt: Date(),
-                lastReadPage: 0,
-                lastReadTime: nil
-            )
-            
-            extractedImages = images
-            pageCount = images.count
-            
-            await MainActor.run {
-                currentComic = comic
-            }
-            
-            return comic
-        }
-    }
-    
-    private func parseTAR(at url: URL) async throws -> ComicBook {
-        let tempDir = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try fileManager.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/7z")
+        process.arguments = ["x", "-o" + tempDir.path, url.path]
+        try process.run()
+        process.waitUntilExit()
         
-        do {
-            let extractedFiles = try await ArchiveManager.shared.extractArchive(at: url, to: tempDir)
-            
-            let images = extractImages(from: tempDir)
-            let coverData = images.first?.jpegData(compressionQuality: 0.8)
-            
-            let format = detectTARFormat(from: url)
-            
-            let comic = ComicBook(
-                id: UUID().uuidString,
-                title: url.deletingPathExtension().lastPathComponent,
-                author: nil,
-                pageCount: images.count,
-                format: format,
-                sourcePath: url.path,
-                coverImage: coverData,
-                extractedPath: tempDir.path,
-                createdAt: Date(),
-                lastReadPage: 0,
-                lastReadTime: nil
-            )
-            
-            extractedImages = images
-            extractedPath = tempDir
-            pageCount = images.count
-            
-            await MainActor.run {
-                currentComic = comic
-            }
-            
-            return comic
-        } catch {
-            try? fileManager.removeItem(at: tempDir)
-            throw ComicError.extractionFailed
-        }
-    }
-    
-    private func parseXZ(at url: URL) async throws -> ComicBook {
-        let tempDir = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try fileManager.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        let images = extractImages(from: tempDir)
+        let coverData = images.first?.jpegData(compressionQuality: 0.8)
         
-        do {
-            let extractedFiles = try await ArchiveManager.shared.extractArchive(at: url, to: tempDir)
-            
-            if let firstFile = extractedFiles.first {
-                if extractedImages(from: firstFile).count > 0 {
-                    extractedImages = extractedImages(from: firstFile)
-                } else {
-                    extractedImages = extractImages(from: firstFile.deletingLastPathComponent())
-                }
-            }
-            
-            if extractedImages.isEmpty {
-                extractedImages = extractImages(from: tempDir)
-            }
-            
-            let coverData = extractedImages.first?.jpegData(compressionQuality: 0.8)
-            
-            let comic = ComicBook(
-                id: UUID().uuidString,
-                title: url.deletingPathExtension().lastPathComponent,
-                author: nil,
-                pageCount: extractedImages.count,
-                format: .xz,
-                sourcePath: url.path,
-                coverImage: coverData,
-                extractedPath: tempDir.path,
-                createdAt: Date(),
-                lastReadPage: 0,
-                lastReadTime: nil
-            )
-            
-            pageCount = extractedImages.count
-            
-            await MainActor.run {
-                currentComic = comic
-            }
-            
-            return comic
-        } catch {
-            try? fileManager.removeItem(at: tempDir)
-            throw ComicError.extractionFailed
+        let comic = ComicBook(
+            id: UUID().uuidString,
+            title: url.deletingPathExtension().lastPathComponent,
+            author: nil,
+            pageCount: images.count,
+            format: .cb7,
+            sourcePath: url.path,
+            coverImage: coverData,
+            extractedPath: tempDir.path,
+            createdAt: Date(),
+            lastReadPage: 0,
+            lastReadTime: nil
+        )
+        
+        extractedImages = images
+        extractedPath = tempDir
+        pageCount = images.count
+        
+        await MainActor.run {
+            currentComic = comic
         }
-    }
-    
-    private func detectTARFormat(from url: URL) -> ComicBook.ComicFormat {
-        let filename = url.lastPathComponent.lowercased()
-        if filename.hasSuffix(".tar.gz") || filename.hasSuffix(".tgz") {
-            return .tarGz
-        } else if filename.hasSuffix(".tar.bz2") || filename.hasSuffix(".tbz2") {
-            return .tarBz2
-        } else if filename.hasSuffix(".tar.xz") {
-            return .tarXz
-        }
-        return .tar
-    }
-    
-    private func extractedImages(from url: URL) -> [UIImage] {
-        guard let data = try? Data(contentsOf: url),
-              let image = UIImage(data: data) else {
-            return []
-        }
-        return [image]
+        
+        return comic
     }
     
     private func parsePDF(at url: URL) async throws -> ComicBook {
@@ -505,159 +364,6 @@ class ComicParserManager: BaseService, ObservableObject {
         return imageFiles.compactMap { UIImage(contentsOfFile: $0.path) }
     }
     
-    private func extractImagesFromArchive(at url: URL) -> [UIImage]? {
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        
-        if data.starts(with: [0x50, 0x4B, 0x03, 0x04]) {
-            return extractImagesFromZIP(data: data)
-        } else if data.starts(with: [0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C]) {
-            return extractImagesFrom7Z(data: data)
-        } else if data.starts(with: [0x1F, 0x8B]) {
-            if let decompressed = try? (data as NSData).decompressed(using: .zlib) {
-                return extractImagesFromTAR(data: decompressed)
-            }
-        } else if data.starts(with: [0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00]) {
-            if let decompressed = try? (data as NSData).decompressed(using: .lzfse) {
-                return extractImagesFromTAR(data: decompressed)
-            }
-        } else if data.starts(with: [0x42, 0x5A, 0x68]) {
-            if let decompressed = try? (data as NSData).decompressed(using: .bzip2) {
-                return extractImagesFromTAR(data: decompressed)
-            }
-        }
-        
-        return nil
-    }
-    
-    private func extractImagesFromZIP(data: Data) -> [UIImage]? {
-        var images: [UIImage] = []
-        var imageDataArray: [(Int, Data)] = []
-        var offset = 0
-        
-        while offset < data.count - 4 {
-            guard offset + 4 <= data.count else { break }
-            let signature = [UInt8](data[offset..<offset+4])
-            
-            if signature == [0x50, 0x4B, 0x03, 0x04] {
-                guard offset + 30 <= data.count else { break }
-                
-                let compressionMethod = Int(data[offset+8]) | (Int(data[offset+9]) << 8)
-                let nameLength = Int(data[offset+26]) | (Int(data[offset+27]) << 8)
-                let extraLength = Int(data[offset+28]) | (Int(data[offset+29]) << 8)
-                let compressedSize = Int(data[offset+18]) | (Int(data[offset+19]) << 8) |
-                                   (Int(data[offset+20]) << 16) | (Int(data[offset+21]) << 24)
-                
-                let nameStart = offset + 30
-                let nameEnd = nameStart + nameLength
-                
-                guard nameEnd <= data.count else { break }
-                
-                let nameData = data[nameStart..<nameEnd]
-                guard let name = String(data: nameData, encoding: .utf8) ?? String(data: nameData, encoding: .isoLatin1) else {
-                    offset = nameEnd + extraLength + compressedSize
-                    continue
-                }
-                
-                let ext = URL(fileURLWithPath: name).pathExtension.lowercased()
-                let imageExtensions = ["jpg", "jpeg", "png", "gif", "webp", "bmp"]
-                
-                if imageExtensions.contains(ext) && !name.hasSuffix("/") {
-                    let dataStart = nameEnd + extraLength
-                    let dataEnd = dataStart + compressedSize
-                    
-                    guard dataEnd <= data.count else { break }
-                    
-                    let compressedData = data[dataStart..<dataEnd]
-                    
-                    var decompressedData: Data?
-                    if compressionMethod == 0 {
-                        decompressedData = Data(compressedData)
-                    } else if compressionMethod == 8 {
-                        decompressedData = decompressDeflate(Data(compressedData))
-                    }
-                    
-                    if let content = decompressedData {
-                        imageDataArray.append((imageDataArray.count, content))
-                    }
-                }
-                
-                offset = dataEnd
-            } else if signature == [0x50, 0x4B, 0x05, 0x06] || signature == [0x50, 0x4B, 0x06, 0x06] {
-                break
-            } else {
-                offset += 1
-            }
-        }
-        
-        imageDataArray.sort { $0.0 < $1.0 }
-        images = imageDataArray.compactMap { UIImage(data: $0.1) }
-        
-        return images.isEmpty ? nil : images
-    }
-    
-    private func extractImagesFrom7Z(data: Data) -> [UIImage]? {
-        return nil
-    }
-    
-    private func extractImagesFromTAR(data: Data) -> [UIImage]? {
-        var images: [UIImage] = []
-        var imageDataArray: [(Int, Data)] = []
-        var offset = 0
-        
-        while offset + 512 <= data.count {
-            let header = data[offset..<offset+512]
-            
-            let typeFlag = header[156]
-            
-            if typeFlag == 0 || typeFlag == 0x30 {
-                let nameData = header[0..<100]
-                guard let name = String(data: nameData, encoding: .utf8)?.trimmingCharacters(in: .init(charactersIn: "\0")) else {
-                    offset += 512
-                    continue
-                }
-                
-                if name.isEmpty { break }
-                
-                let sizeStr = String(data: header[124..<136], encoding: .ascii)?.trimmingCharacters(in: .init(charactersIn: "\0 ")) ?? "0"
-                let size = (Int(sizeStr, radix: 8) ?? 0)
-                
-                let ext = URL(fileURLWithPath: name).pathExtension.lowercased()
-                let imageExtensions = ["jpg", "jpeg", "png", "gif", "webp", "bmp"]
-                
-                if imageExtensions.contains(ext) && size > 0 {
-                    offset += 512
-                    
-                    if offset + size <= data.count {
-                        let fileData = data[offset..<offset+size]
-                        imageDataArray.append((imageDataArray.count, Data(fileData)))
-                    }
-                    
-                    let padding = (512 - (size % 512)) % 512
-                    offset += size + padding
-                } else {
-                    offset += 512 + ((size + 511) / 512) * 512
-                }
-            } else {
-                let sizeStr = String(data: header[124..<136], encoding: .ascii)?.trimmingCharacters(in: .init(charactersIn: "\0 ")) ?? "0"
-                let size = (Int(sizeStr, radix: 8) ?? 0)
-                offset += 512 + ((size + 511) / 512) * 512
-            }
-            
-            if offset > data.count { break }
-        }
-        
-        imageDataArray.sort { $0.0 < $1.0 }
-        images = imageDataArray.compactMap { UIImage(data: $0.1) }
-        
-        return images.isEmpty ? nil : images
-    }
-    
-    private func decompressDeflate(_ data: Data) -> Data? {
-        guard !data.isEmpty else { return Data() }
-        
-        return try? (data as NSData).decompressed(using: .lzfse)
-    }
-    
     func getPage(at index: Int) -> UIImage? {
         guard index >= 0 && index < extractedImages.count else { return nil }
         return extractedImages[index]
@@ -723,6 +429,22 @@ class ComicReadingSettings: BaseService, ObservableObject {
     @Published var magnifierSize: MagnifierSize = .medium
     @Published var keepScreenOn: Bool = true
     @Published var autoPlaySpeed: Double = 5.0
+    @Published var imageQuality: ImageQuality = .high
+    @Published var alwaysShowStatusBar: Bool = false
+    @Published var hideBatteryPercentage: Bool = false
+    
+    var imageQualityDescription: String {
+        switch imageQuality {
+        case .original:
+            return "使用原始图片画质，最清晰，占用最多存储空间"
+        case .high:
+            return "高质量图片，最大边限制3000像素，推荐收藏使用"
+        case .medium:
+            return "中等画质，最大边限制2000像素，平衡画质与空间"
+        case .low:
+            return "省流量模式，最大边限制1200像素，适合移动网络"
+        }
+    }
     
     enum ReadingMode: String, CaseIterable, Codable {
         case rightToLeft = "rightToLeft"
@@ -796,6 +518,49 @@ class ComicReadingSettings: BaseService, ObservableObject {
         }
     }
     
+    enum ImageQuality: String, CaseIterable, Codable {
+        case original = "original"
+        case high = "high"
+        case medium = "medium"
+        case low = "low"
+        
+        var displayName: String {
+            switch self {
+            case .original: return "原图"
+            case .high: return "高质量"
+            case .medium: return "中等"
+            case .low: return "省流量"
+            }
+        }
+        
+        var compressionQuality: CGFloat {
+            switch self {
+            case .original: return 1.0
+            case .high: return 0.9
+            case .medium: return 0.7
+            case .low: return 0.5
+            }
+        }
+        
+        var maxDimension: CGFloat? {
+            switch self {
+            case .original: return nil
+            case .high: return 3000
+            case .medium: return 2000
+            case .low: return 1200
+            }
+        }
+        
+        var icon: String {
+            switch self {
+            case .original: return "photo.stack"
+            case .high: return "photo"
+            case .medium: return "photo.fill"
+            case .low: return "photo.badge.ellipsis"
+            }
+        }
+    }
+    
     private let settingsKey = "ComicReadingSettings"
     
     private override init() {
@@ -815,6 +580,9 @@ class ComicReadingSettings: BaseService, ObservableObject {
             magnifierEnabled = saved.magnifierEnabled
             magnifierSize = saved.magnifierSize
             keepScreenOn = saved.keepScreenOn
+            imageQuality = saved.imageQuality
+            alwaysShowStatusBar = saved.alwaysShowStatusBar
+            hideBatteryPercentage = saved.hideBatteryPercentage
         }
     }
     
@@ -829,7 +597,10 @@ class ComicReadingSettings: BaseService, ObservableObject {
             pinchToZoom: pinchToZoom,
             magnifierEnabled: magnifierEnabled,
             magnifierSize: magnifierSize,
-            keepScreenOn: keepScreenOn
+            keepScreenOn: keepScreenOn,
+            imageQuality: imageQuality,
+            alwaysShowStatusBar: alwaysShowStatusBar,
+            hideBatteryPercentage: hideBatteryPercentage
         )
         saveCodable(data, key: settingsKey)
     }
@@ -845,5 +616,8 @@ class ComicReadingSettings: BaseService, ObservableObject {
         var magnifierEnabled: Bool
         var magnifierSize: MagnifierSize
         var keepScreenOn: Bool
+        var imageQuality: ImageQuality
+        var alwaysShowStatusBar: Bool
+        var hideBatteryPercentage: Bool
     }
 }

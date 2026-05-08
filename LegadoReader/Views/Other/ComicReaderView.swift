@@ -14,6 +14,8 @@ struct ComicReaderView: View {
     @State private var lastOffset: CGSize = .zero
     @State private var magnifierPosition: CGPoint?
     @State private var showingMagnifier = false
+    @State private var showStatusBar = false
+    @State private var batteryLevel: Float = 0.0
     
     let comicBook: ComicParserManager.ComicBook
     
@@ -28,20 +30,117 @@ struct ComicReaderView: View {
                 comicContentView
             }
             
+            TwoFingerBrightnessController(isActive: .constant(true)) { _ in }
+            
+            BrightnessIndicatorOverlay()
+            
+            if showStatusBar || settings.alwaysShowStatusBar {
+                customStatusBar
+            }
+            
             if showingPageSlider || settings.showPageSlider {
                 pageSliderOverlay
             }
         }
         .navigationBarHidden(true)
-        .statusBar(hidden: true)
+        .statusBar(hidden: !settings.alwaysShowStatusBar)
         .sheet(isPresented: $showingSettings) {
             ComicSettingsView()
         }
         .onAppear {
             loadComic()
+            setupBatteryMonitor()
         }
         .onDisappear {
             comicManager.closeComic()
+        }
+    }
+    
+    private var customStatusBar: some View {
+        VStack {
+            HStack {
+                Spacer()
+                
+                HStack(spacing: 16) {
+                    if settings.alwaysShowStatusBar && !settings.hideBatteryPercentage {
+                        batteryIndicator
+                    }
+                    
+                    timeIndicator
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule()
+                        .fill(Color.black.opacity(0.5))
+                )
+            }
+            .padding(.top, 8)
+            .padding(.horizontal, 16)
+            
+            Spacer()
+        }
+        .transition(.opacity)
+    }
+    
+    private var batteryIndicator: some View {
+        HStack(spacing: 4) {
+            Image(systemName: batteryIcon)
+                .font(.system(size: 14))
+                .foregroundColor(.white)
+            
+            if !settings.hideBatteryPercentage {
+                Text("\(Int(batteryLevel * 100))%")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white)
+            }
+        }
+    }
+    
+    private var batteryIcon: String {
+        UIDevice.current.isBatteryMonitoringEnabled = true
+        let batteryLevel = UIDevice.current.batteryLevel
+        let batteryState = UIDevice.current.batteryState
+        
+        if batteryState == .charging {
+            return "battery.100.bolt"
+        } else if batteryLevel > 0.75 {
+            return "battery.100"
+        } else if batteryLevel > 0.5 {
+            return "battery.75"
+        } else if batteryLevel > 0.25 {
+            return "battery.50"
+        } else {
+            return "battery.25"
+        }
+    }
+    
+    private var timeIndicator: some View {
+        Text(currentTimeString)
+            .font(.system(size: 12, weight: .medium))
+            .foregroundColor(.white)
+            .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
+            let formatter = DateFormatter()
+            formatter.dateFormat = "HH:mm"
+        }
+    }
+    
+    private var currentTimeString: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: Date())
+    }
+    
+    private func setupBatteryMonitor() {
+        UIDevice.current.isBatteryMonitoringEnabled = true
+        batteryLevel = UIDevice.current.batteryLevel
+        
+        NotificationCenter.default.addObserver(
+            forName: UIDevice.batteryLevelDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            batteryLevel = UIDevice.current.batteryLevel
         }
     }
     
@@ -98,6 +197,16 @@ struct ComicReaderView: View {
                     }
                     .onTapGesture { location in
                         handleTap(at: location, in: geometry.size)
+                    }
+                    
+                    if let position = magnifierPosition,
+                       let image = comicManager.getPage(at: comicManager.currentPage) {
+                        MagnifierView(
+                            image: image,
+                            position: position,
+                            viewSize: geometry.size,
+                            radius: settings.magnifierSize.radius
+                        )
                     }
                 }
             }
@@ -304,33 +413,38 @@ struct MagnifierView: View {
     
     var body: some View {
         GeometryReader { geometry in
+            let magnifierSize = radius * 2
+            let magnifiedImageSize = magnifierSize * 2
+            let magnification: CGFloat = 2.0
+            
             ZStack {
                 Circle()
-                    .fill(Color.white)
-                    .frame(width: radius * 2, height: radius * 2)
-                    .shadow(radius: 5)
+                    .fill(Color.black.opacity(0.9))
+                    .frame(width: magnifierSize, height: magnifierSize)
+                    .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
                 
                 Image(uiImage: image)
                     .resizable()
-                    .frame(width: radius * 4, height: radius * 4)
-                    .scaleEffect(2.0)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: magnifiedImageSize, height: magnifiedImageSize)
+                    .scaleEffect(magnification)
                     .offset(
-                        x: -position.x * 2 + radius,
-                        y: -position.y * 2 + radius
+                        x: -position.x * magnification + magnifierSize / 2,
+                        y: -position.y * magnification + magnifierSize / 2
                     )
                     .clipShape(Circle())
                 
                 Circle()
-                    .stroke(Color.white, lineWidth: 3)
-                    .frame(width: radius * 2, height: radius * 2)
+                    .stroke(Color.white, lineWidth: 2)
+                    .frame(width: magnifierSize - 4, height: magnifierSize - 4)
                 
                 Circle()
-                    .stroke(Color.gray.opacity(0.5), lineWidth: 1)
-                    .frame(width: radius * 2 - 4, height: radius * 2 - 4)
+                    .stroke(Color.yellow.opacity(0.5), lineWidth: 1)
+                    .frame(width: magnifierSize / magnification, height: magnifierSize / magnification)
             }
             .position(
-                x: min(max(radius + 20, position.x), geometry.size.width - radius - 20),
-                y: min(max(radius + 20, position.y - 100), geometry.size.height - radius - 20)
+                x: min(max(magnifierSize / 2 + 20, position.x), geometry.size.width - magnifierSize / 2 - 20),
+                y: min(max(magnifierSize + 20, position.y - 120), geometry.size.height - magnifierSize - 20)
             )
         }
     }
@@ -442,47 +556,108 @@ struct ComicBookshelfView: View {
     @StateObject private var comicManager = ComicParserManager.shared
     @State private var showingFilePicker = false
     @State private var selectedComic: ComicParserManager.ComicBook?
-    
-    let comics: [ComicParserManager.ComicBook]
+    @State private var showingDeleteAlert = false
+    @State private var comicToDelete: ComicParserManager.ComicBook?
     
     var body: some View {
+        NavigationView {
+            Group {
+                if comicManager.savedComics.isEmpty {
+                    emptyStateView
+                } else {
+                    comicGridView
+                }
+            }
+            .navigationTitle("漫画书架")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button(action: { showingFilePicker = true }) {
+                        Image(systemName: "plus")
+                    }
+                }
+            }
+            .sheet(isPresented: $showingFilePicker) {
+                DocumentPickerView { url in
+                    handleComicImport(url: url)
+                }
+            }
+            .fullScreenCover(item: $selectedComic) { comic in
+                ComicReaderView(comicBook: comic)
+            }
+            .alert("删除漫画", isPresented: $showingDeleteAlert) {
+                Button("取消", role: .cancel) { }
+                Button("删除", role: .destructive) {
+                    if let comic = comicToDelete {
+                        comicManager.removeComic(comic)
+                    }
+                }
+            } message: {
+                Text("确定要删除「\(comicToDelete?.title ?? "")」吗？")
+            }
+        }
+    }
+    
+    private var emptyStateView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "photo.on.rectangle.angled")
+                .font(.system(size: 80))
+                .foregroundColor(.gray)
+            Text("漫画书架为空")
+                .font(.title2)
+                .foregroundColor(.gray)
+            Text("点击右上角 + 按钮导入漫画")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            Button(action: { showingFilePicker = true }) {
+                Label("导入漫画", systemImage: "plus.circle.fill")
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(20)
+            }
+        }
+    }
+    
+    private var comicGridView: some View {
         ScrollView {
             LazyVGrid(columns: [
                 GridItem(.flexible()),
                 GridItem(.flexible()),
                 GridItem(.flexible())
             ], spacing: 16) {
-                ForEach(comics) { comic in
+                ForEach(comicManager.savedComics) { comic in
                     ComicCoverView(comic: comic)
                         .onTapGesture {
                             selectedComic = comic
+                        }
+                        .contextMenu {
+                            Button(action: { openComic(comic) }) {
+                                Label("阅读", systemImage: "book")
+                            }
+                            
+                            Button(role: .destructive, action: {
+                                comicToDelete = comic
+                                showingDeleteAlert = true
+                            }) {
+                                Label("删除", systemImage: "trash")
+                            }
                         }
                 }
             }
             .padding()
         }
-        .navigationTitle("漫画书架")
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button(action: { showingFilePicker = true }) {
-                    Image(systemName: "plus")
-                }
-            }
-        }
-        .sheet(isPresented: $showingFilePicker) {
-            DocumentPickerView { url in
-                handleComicImport(url: url)
-            }
-        }
-        .fullScreenCover(item: $selectedComic) { comic in
-            ComicReaderView(comicBook: comic)
-        }
+    }
+    
+    private func openComic(_ comic: ComicParserManager.ComicBook) {
+        selectedComic = comic
     }
     
     private func handleComicImport(url: URL) {
         Task {
             do {
-                _ = try await comicManager.parseComic(at: url)
+                let comic = try await comicManager.parseComic(at: url)
+                comicManager.addComic(comic)
             } catch {
                 print("Failed to import comic: \(error)")
             }
@@ -530,19 +705,7 @@ struct DocumentPickerView: UIViewControllerRepresentable {
     var onPick: (URL) -> Void
     
     func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        var supportedTypes: [UTType] = [.archive, .pdf]
-        if let zipType = UTType("public.zip-archive") {
-            supportedTypes.append(zipType)
-        }
-        if let sevenZType = UTType("org.7-zip.7-zip-archive") {
-            supportedTypes.append(sevenZType)
-        }
-        if let tarType = UTType("public.tar-archive") {
-            supportedTypes.append(tarType)
-        }
-        if let gzipType = UTType("org.gnu.gnu-zip-archive") {
-            supportedTypes.append(gzipType)
-        }
+        let supportedTypes: [UTType] = [.archive, .pdf]
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: supportedTypes)
         picker.delegate = context.coordinator
         picker.allowsMultipleSelection = false

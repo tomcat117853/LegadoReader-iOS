@@ -13,7 +13,7 @@ class BackupManager {
         let rssSources: [RSSSource]
         let rssArticles: [RSSArticle]
         let readerSettings: ReaderSettingsData
-        let cleanRules: CleanRulesData
+        let contentFilters: [ContentFilterManager.FilterRule]
         
         struct ReaderSettingsData: Codable {
             let fontSize: CGFloat
@@ -23,11 +23,6 @@ class BackupManager {
             let backgroundColor: String
             let isNightMode: Bool
             let autoReadSpeed: Double
-        }
-        
-        struct CleanRulesData: Codable {
-            let globalRules: [ReplaceRule]
-            let bookRules: [String: [ReplaceRule]]
         }
     }
     
@@ -73,21 +68,8 @@ class BackupManager {
                 autoReadSpeed: userDefaults.double(forKey: "ReaderSettings_autoReadSpeed")
             )
             
-            // 获取净化规则
-            var globalRules: [ReplaceRule] = []
-            if let data = userDefaults.data(forKey: "CleanRuleManager_GlobalRules") {
-                globalRules = (try? JSONDecoder().decode([ReplaceRule].self, from: data)) ?? []
-            }
-            
-            var bookRules: [String: [ReplaceRule]] = [:]
-            if let data = userDefaults.data(forKey: "CleanRuleManager_BookRules") {
-                bookRules = (try? JSONDecoder().decode([String: [ReplaceRule]].self, from: data)) ?? [:]
-            }
-            
-            let cleanRulesData = BackupData.CleanRulesData(
-                globalRules: globalRules,
-                bookRules: bookRules
-            )
+            // 获取内容过滤规则
+            let contentFilters = ContentFilterManager.shared.filters
             
             let backup = BackupData(
                 backupDate: Date(),
@@ -96,7 +78,7 @@ class BackupManager {
                 rssSources: rssSources,
                 rssArticles: rssArticles,
                 readerSettings: settingsData,
-                cleanRules: cleanRulesData
+                contentFilters: contentFilters
             )
             
             let encoder = JSONEncoder()
@@ -157,14 +139,9 @@ class BackupManager {
         userDefaults.set(backup.readerSettings.isNightMode, forKey: "ReaderSettings_isNightMode")
         userDefaults.set(backup.readerSettings.autoReadSpeed, forKey: "ReaderSettings_autoReadSpeed")
         
-        // 恢复净化规则
-        if let data = try? JSONEncoder().encode(backup.cleanRules.globalRules) {
-            userDefaults.set(data, forKey: "CleanRuleManager_GlobalRules")
-        }
-        
-        if let data = try? JSONEncoder().encode(backup.cleanRules.bookRules) {
-            userDefaults.set(data, forKey: "CleanRuleManager_BookRules")
-        }
+        // 恢复内容过滤规则
+        ContentFilterManager.shared.filters = backup.contentFilters
+        ContentFilterManager.shared.saveFilters()
         
         userDefaults.synchronize()
     }

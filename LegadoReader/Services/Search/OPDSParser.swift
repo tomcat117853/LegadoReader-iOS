@@ -24,6 +24,58 @@ class OPDSParser: NSObject, XMLParserDelegate {
         return parse(data: data)
     }
     
+    func parseToCloudFiles(_ data: Data) -> [CloudStorageManager.CloudFile] {
+        guard let catalog = parse(data: data) else { return [] }
+        
+        var files: [CloudStorageManager.CloudFile] = []
+        
+        for feed in catalog.feeds {
+            if let href = feed.href {
+                files.append(CloudStorageManager.CloudFile(
+                    name: feed.title.isEmpty ? "目录" : feed.title,
+                    path: href,
+                    isDirectory: true,
+                    size: 0,
+                    modifiedDate: feed.updated,
+                    type: "folder"
+                ))
+            }
+        }
+        
+        for entry in catalog.entries {
+            let fileName = entry.title.isEmpty ? "未知书籍" : entry.title
+            var downloadPath = ""
+            var fileSize: Int64 = 0
+            var fileType = "epub"
+            
+            if let link = entry.acquisitionLinks.first(where: { $0.type?.contains("epub") == true }) {
+                downloadPath = link.href
+                fileType = "epub"
+            } else if let link = entry.acquisitionLinks.first(where: { $0.type?.contains("pdf") == true }) {
+                downloadPath = link.href
+                fileType = "pdf"
+            } else if let link = entry.acquisitionLinks.first {
+                downloadPath = link.href
+                if let type = link.type {
+                    if type.contains("pdf") { fileType = "pdf" }
+                    else if type.contains("mobi") { fileType = "mobi" }
+                    else if type.contains("zip") || type.contains("rar") { fileType = "zip" }
+                }
+            }
+            
+            files.append(CloudStorageManager.CloudFile(
+                name: fileName + ".\(fileType)",
+                path: downloadPath,
+                isDirectory: false,
+                size: fileSize,
+                modifiedDate: entry.updated,
+                type: fileType
+            ))
+        }
+        
+        return files
+    }
+    
     func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName qName: String?, attributes attributeDict: [String : String] = [:]) {
         currentElement = elementName
         currentContent = ""
