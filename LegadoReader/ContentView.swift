@@ -61,6 +61,7 @@ struct BookshelfView: View {
     @State private var isGridView = true
     @State private var showingSearch = false
     @State private var showingNotifications = false
+    @State private var showingBrowser = false
     @State private var selectedBook: Book?
     
     var body: some View {
@@ -82,6 +83,9 @@ struct BookshelfView: View {
                     }
                 }
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
+                    Button(action: { showingBrowser = true }) {
+                        Image(systemName: "globe")
+                    }
                     Button(action: { showingNotifications = true }) {
                         ZStack(alignment: .topTrailing) {
                             Image(systemName: "bell")
@@ -107,6 +111,9 @@ struct BookshelfView: View {
             }
             .sheet(isPresented: $showingNotifications) {
                 UpdateHistoryView()
+            }
+            .sheet(isPresented: $showingBrowser) {
+                WebBrowserView()
             }
             .sheet(item: $selectedBook) { book in
                 EnhancedBookDetailView(book: book)
