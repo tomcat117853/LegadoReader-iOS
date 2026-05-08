@@ -19,6 +19,19 @@ struct SettingsView: View {
                         Label("主题设置", systemImage: "palette")
                     }
                     
+                    NavigationLink(destination: ThemeSkinSettingsView()) {
+                        HStack {
+                            Image(systemName: "wand.and.stars")
+                                .foregroundColor(.purple)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("一键换肤")
+                                Text("切换全局主题外观")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    
                     NavigationLink(destination: TitleSegmentationSettingsView()) {
                         HStack {
                             Image(systemName: "text.badge.checkmark")
