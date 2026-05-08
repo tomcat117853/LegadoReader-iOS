@@ -11,9 +11,11 @@ class ComicParserManager: BaseService, ObservableObject {
     @Published var currentComic: ComicBook?
     @Published var currentPage: Int = 0
     @Published var pageCount: Int = 0
+    @Published var savedComics: [ComicBook] = []
     
     private var extractedImages: [UIImage] = []
     private var extractedPath: URL?
+    private let savedComicsKey = "ComicParserManager_savedComics"
     
     struct ComicBook: Identifiable, Codable {
         let id: String
@@ -66,6 +68,39 @@ class ComicParserManager: BaseService, ObservableObject {
     
     private override init() {
         super.init()
+        loadSavedComics()
+    }
+    
+    private func loadSavedComics() {
+        if let data = UserDefaults.standard.data(forKey: savedComicsKey),
+           let comics = try? JSONDecoder().decode([ComicBook].self, from: data) {
+            savedComics = comics
+        }
+    }
+    
+    private func saveComics() {
+        if let data = try? JSONEncoder().encode(savedComics) {
+            UserDefaults.standard.set(data, forKey: savedComicsKey)
+        }
+    }
+    
+    func addComic(_ comic: ComicBook) {
+        if !savedComics.contains(where: { $0.id == comic.id }) {
+            savedComics.append(comic)
+            saveComics()
+        }
+    }
+    
+    func removeComic(_ comic: ComicBook) {
+        savedComics.removeAll { $0.id == comic.id }
+        saveComics()
+    }
+    
+    func updateComic(_ comic: ComicBook) {
+        if let index = savedComics.firstIndex(where: { $0.id == comic.id }) {
+            savedComics[index] = comic
+            saveComics()
+        }
     }
     
     func parseComic(at url: URL) async throws -> ComicBook {

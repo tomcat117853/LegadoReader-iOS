@@ -49,12 +49,19 @@ struct ContentView: View {
                 }
                 .tag(5)
             
+            ComicBookshelfView()
+                .tabItem {
+                    Image(systemName: "photo.on.rectangle")
+                    Text("漫画")
+                }
+                .tag(6)
+            
             SettingsView()
                 .tabItem {
                     Image(systemName: "gear")
                     Text("设置")
                 }
-                .tag(6)
+                .tag(7)
         }
         .accentColor(.blue)
     }

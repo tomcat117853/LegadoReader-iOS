@@ -457,47 +457,108 @@ struct ComicBookshelfView: View {
     @StateObject private var comicManager = ComicParserManager.shared
     @State private var showingFilePicker = false
     @State private var selectedComic: ComicParserManager.ComicBook?
-    
-    let comics: [ComicParserManager.ComicBook]
+    @State private var showingDeleteAlert = false
+    @State private var comicToDelete: ComicParserManager.ComicBook?
     
     var body: some View {
+        NavigationView {
+            Group {
+                if comicManager.savedComics.isEmpty {
+                    emptyStateView
+                } else {
+                    comicGridView
+                }
+            }
+            .navigationTitle("漫画书架")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button(action: { showingFilePicker = true }) {
+                        Image(systemName: "plus")
+                    }
+                }
+            }
+            .sheet(isPresented: $showingFilePicker) {
+                DocumentPickerView { url in
+                    handleComicImport(url: url)
+                }
+            }
+            .fullScreenCover(item: $selectedComic) { comic in
+                ComicReaderView(comicBook: comic)
+            }
+            .alert("删除漫画", isPresented: $showingDeleteAlert) {
+                Button("取消", role: .cancel) { }
+                Button("删除", role: .destructive) {
+                    if let comic = comicToDelete {
+                        comicManager.removeComic(comic)
+                    }
+                }
+            } message: {
+                Text("确定要删除「\(comicToDelete?.title ?? "")」吗？")
+            }
+        }
+    }
+    
+    private var emptyStateView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "photo.on.rectangle.angled")
+                .font(.system(size: 80))
+                .foregroundColor(.gray)
+            Text("漫画书架为空")
+                .font(.title2)
+                .foregroundColor(.gray)
+            Text("点击右上角 + 按钮导入漫画")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            Button(action: { showingFilePicker = true }) {
+                Label("导入漫画", systemImage: "plus.circle.fill")
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(20)
+            }
+        }
+    }
+    
+    private var comicGridView: some View {
         ScrollView {
             LazyVGrid(columns: [
                 GridItem(.flexible()),
                 GridItem(.flexible()),
                 GridItem(.flexible())
             ], spacing: 16) {
-                ForEach(comics) { comic in
+                ForEach(comicManager.savedComics) { comic in
                     ComicCoverView(comic: comic)
                         .onTapGesture {
                             selectedComic = comic
+                        }
+                        .contextMenu {
+                            Button(action: { openComic(comic) }) {
+                                Label("阅读", systemImage: "book")
+                            }
+                            
+                            Button(role: .destructive, action: {
+                                comicToDelete = comic
+                                showingDeleteAlert = true
+                            }) {
+                                Label("删除", systemImage: "trash")
+                            }
                         }
                 }
             }
             .padding()
         }
-        .navigationTitle("漫画书架")
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button(action: { showingFilePicker = true }) {
-                    Image(systemName: "plus")
-                }
-            }
-        }
-        .sheet(isPresented: $showingFilePicker) {
-            DocumentPickerView { url in
-                handleComicImport(url: url)
-            }
-        }
-        .fullScreenCover(item: $selectedComic) { comic in
-            ComicReaderView(comicBook: comic)
-        }
+    }
+    
+    private func openComic(_ comic: ComicParserManager.ComicBook) {
+        selectedComic = comic
     }
     
     private func handleComicImport(url: URL) {
         Task {
             do {
-                _ = try await comicManager.parseComic(at: url)
+                let comic = try await comicManager.parseComic(at: url)
+                comicManager.addComic(comic)
             } catch {
                 print("Failed to import comic: \(error)")
             }
