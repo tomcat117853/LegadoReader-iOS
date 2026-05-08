@@ -28,6 +28,7 @@ enum PageTurnMode: String, Codable, CaseIterable {
 struct VerticalScrollReaderView: View {
     @StateObject private var readerSettings = ReaderSettings.shared
     @StateObject private var eyeCareManager = EyeCareManager.shared
+    @StateObject private var annotationService = AnnotationService.shared
     @EnvironmentObject var sourceStore: SourceStore
     
     let book: Book
@@ -47,6 +48,9 @@ struct VerticalScrollReaderView: View {
     @State private var autoScrollSpeed: Double = 1.0
     @State private var isAutoScrolling = false
     @State private var autoScrollTimer: Timer?
+    @State private var showingAnnotationPopup = false
+    @State private var popupPosition: CGPoint = .zero
+    @State private var selectedAnnotation: AnnotationService.Annotation?
     
     var body: some View {
         GeometryReader { geometry in
@@ -342,8 +346,10 @@ struct ChapterContentView: View {
     let chapterIndex: Int
     let isCurrentChapter: Bool
     
+    @StateObject private var annotationService = AnnotationService.shared
     @State private var content: String = ""
     @State private var isLoading = false
+    @State private var annotations: [AnnotationService.Annotation] = []
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -360,11 +366,20 @@ struct ChapterContentView: View {
                     Spacer()
                 }
             } else {
-                Text(content)
-                    .font(.system(size: fontSize))
-                    .foregroundColor(textColor)
-                    .lineSpacing(lineSpacing)
-                    .multilineTextAlignment(textAlignment)
+                AnnotationText(
+                    content: content,
+                    annotations: annotations,
+                    fontSize: fontSize,
+                    textColor: textColor,
+                    lineSpacing: lineSpacing,
+                    textAlignment: textAlignment,
+                    onAnnotationTap: { annotation in
+                        NotificationCenter.default.post(
+                            name: .showAnnotationPopup,
+                            object: annotation
+                        )
+                    }
+                )
             }
         }
         .frame(maxWidth: .infinity, alignment: alignment(for: textAlignment))
@@ -372,6 +387,7 @@ struct ChapterContentView: View {
         .background(backgroundColor)
         .onAppear {
             loadContent()
+            loadAnnotations()
         }
     }
     
@@ -402,6 +418,89 @@ struct ChapterContentView: View {
                 }
             }
         }
+    }
+    
+    private func loadAnnotations() {
+        annotations = annotationService.getAnnotations(for: book.id, chapterIndex: chapterIndex)
+    }
+}
+
+struct AnnotationText: View {
+    let content: String
+    let annotations: [AnnotationService.Annotation]
+    let fontSize: CGFloat
+    let textColor: Color
+    let lineSpacing: CGFloat
+    let textAlignment: TextAlignment
+    let onAnnotationTap: (AnnotationService.Annotation) -> Void
+    
+    var body: some View {
+        let attributedText = NSAttributedString(string: content)
+        Text(content)
+            .font(.system(size: fontSize))
+            .foregroundColor(textColor)
+            .lineSpacing(lineSpacing)
+            .multilineTextAlignment(textAlignment)
+            .overlay(annotationHighlights)
+    }
+    
+    private var annotationHighlights: some View {
+        ZStack {
+            ForEach(annotations) { annotation in
+                if let range = annotation.range(in: content) {
+                    Text(content[range])
+                        .font(.system(size: fontSize))
+                        .foregroundColor(.clear)
+                        .background(
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(Color(hex: annotation.colorHex) ?? .yellow)
+                                .opacity(0.3)
+                        )
+                        .onTapGesture {
+                            onAnnotationTap(annotation)
+                        }
+                }
+            }
+        }
+    }
+}
+
+extension AnnotationService.Annotation {
+    func range(in text: String) -> Range<String.Index>? {
+        guard startOffset >= 0, endOffset <= text.count else { return nil }
+        let startIndex = text.index(text.startIndex, offsetBy: startOffset)
+        let endIndex = text.index(text.startIndex, offsetBy: endOffset)
+        return startIndex..<endIndex
+    }
+}
+
+extension Notification.Name {
+    static let showAnnotationPopup = Notification.Name("showAnnotationPopup")
+}
+
+extension Color {
+    init?(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+        let a, r, g, b: UInt64
+        switch hex.count {
+        case 3:
+            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
+        case 6:
+            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
+        case 8:
+            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
+        default:
+            return nil
+        }
+        self.init(
+            .sRGB,
+            red: Double(r) / 255,
+            green: Double(g) / 255,
+            blue: Double(b) / 255,
+            opacity: Double(a) / 255
+        )
     }
 }
 

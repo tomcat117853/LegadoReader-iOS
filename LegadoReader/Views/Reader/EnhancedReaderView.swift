@@ -5,6 +5,7 @@ struct EnhancedReaderView: View {
     @StateObject private var eyeCareManager = EyeCareManager.shared
     @StateObject private var noteManager = BookmarkNoteManager.shared
     @StateObject private var historyManager = ReadingHistoryManager.shared
+    @StateObject private var annotationService = AnnotationService.shared
     @EnvironmentObject var sourceStore: SourceStore
     
     let book: Book
@@ -20,8 +21,15 @@ struct EnhancedReaderView: View {
     @State private var showingContextMenu = false
     @State private var contextMenuPosition: CGPoint = .zero
     @State private var selectedText: String = ""
+    @State private var selectedTextOffset: (start: Int, end: Int) = (0, 0)
     @State private var showingCopyMenu = false
     @State private var audioAutoFollowEnabled: Bool = false
+    @State private var showingAnnotationPopup = false
+    @State private var popupPosition: CGPoint = .zero
+    @State private var selectedAnnotation: AnnotationService.Annotation?
+    @State private var showingAnnotationMenu = false
+    @State private var annotationMenuPosition: CGPoint = .zero
+    @State private var showingAnnotationEditSheet = false
     
     var body: some View {
         GeometryReader { geometry in
@@ -60,6 +68,38 @@ struct EnhancedReaderView: View {
                 if showingContextMenu {
                     contextMenuOverlay
                 }
+                
+                if showingAnnotationPopup, let annotation = selectedAnnotation {
+                    AnnotationPopupOverlay(
+                        annotation: annotation,
+                        position: popupPosition,
+                        onEdit: { annotation in
+                            selectedAnnotation = annotation
+                            showingAnnotationEditSheet = true
+                        },
+                        onDelete: { annotation in
+                            annotationService.removeAnnotation(annotation)
+                            showingAnnotationPopup = false
+                        },
+                        onDismiss: {
+                            showingAnnotationPopup = false
+                        }
+                    )
+                }
+                
+                if showingAnnotationMenu {
+                    AnnotationPopupMenuOverlay(
+                        position: annotationMenuPosition,
+                        selectedText: selectedText,
+                        onHighlight: handleHighlight,
+                        onAddNote: handleAddNote,
+                        onCopy: handleCopy,
+                        onShare: handleShare,
+                        onDismiss: {
+                            showingAnnotationMenu = false
+                        }
+                    )
+                }
             }
             .gesture(longPressGesture)
             .onTapGesture(count: 2) {
@@ -80,6 +120,21 @@ struct EnhancedReaderView: View {
         }
         .sheet(isPresented: $showingNoteSheet) {
             NoteEditorView(book: book, chapterIndex: currentChapterIndex, selectedText: selectedText)
+        }
+        .sheet(isPresented: $showingAnnotationEditSheet) {
+            if let annotation = selectedAnnotation {
+                AnnotationEditSheet(
+                    bookId: book.id,
+                    chapterId: chapters[currentChapterIndex].id,
+                    chapterIndex: currentChapterIndex,
+                    chapterTitle: chapters[currentChapterIndex].title,
+                    bookName: book.name,
+                    selectedText: annotation.text,
+                    startOffset: annotation.startOffset,
+                    endOffset: annotation.endOffset,
+                    annotation: annotation
+                )
+            }
         }
         .onAppear {
             loadChapters()
@@ -231,7 +286,62 @@ struct EnhancedReaderView: View {
     private var longPressGesture: some Gesture {
         LongPressGesture(minimumDuration: 0.5)
             .onEnded { _ in
+                if !showingAnnotationMenu {
+                    selectedText = "示例文本"
+                    selectedTextOffset = (0, selectedText.count)
+                    annotationMenuPosition = CGPoint(x: UIScreen.main.bounds.width / 2, y: UIScreen.main.bounds.height * 0.6)
+                    showingAnnotationMenu = true
+                }
             }
+    }
+    
+    private func handleHighlight() {
+        let chapter = chapters[currentChapterIndex]
+        let annotation = AnnotationService.Annotation(
+            bookId: book.id,
+            chapterId: chapter.id,
+            chapterIndex: currentChapterIndex,
+            chapterTitle: chapter.title,
+            bookName: book.name,
+            startOffset: selectedTextOffset.start,
+            endOffset: selectedTextOffset.end,
+            text: selectedText,
+            style: .highlight
+        )
+        annotationService.addAnnotation(annotation)
+        showingAnnotationMenu = false
+    }
+    
+    private func handleAddNote() {
+        let chapter = chapters[currentChapterIndex]
+        let annotation = AnnotationService.Annotation(
+            bookId: book.id,
+            chapterId: chapter.id,
+            chapterIndex: currentChapterIndex,
+            chapterTitle: chapter.title,
+            bookName: book.name,
+            startOffset: selectedTextOffset.start,
+            endOffset: selectedTextOffset.end,
+            text: selectedText,
+            style: .highlight,
+            note: ""
+        )
+        annotationService.addAnnotation(annotation)
+        selectedAnnotation = annotation
+        showingAnnotationMenu = false
+        showingAnnotationEditSheet = true
+    }
+    
+    private func handleCopy() {
+        UIPasteboard.general.string = selectedText
+        showingAnnotationMenu = false
+    }
+    
+    private func handleShare() {
+        if let url = URL(string: "mailto:?body=\(selectedText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")") {
+            UIApplication.shared.open(url)
+        }
+        showingAnnotationMenu = false
     }
     
     private func handleTap() {
@@ -585,6 +695,158 @@ struct AudioAutoFollowSettingsView: View {
                     Text("翻页模式")
                 }
             }
+        }
+    }
+}
+
+struct AnnotationPopupOverlay: View {
+    let annotation: AnnotationService.Annotation
+    let position: CGPoint
+    let onEdit: (AnnotationService.Annotation) -> Void
+    let onDelete: (AnnotationService.Annotation) -> Void
+    let onDismiss: () -> Void
+    
+    @State private var showActions = false
+    
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.3)
+                .onTapGesture {
+                    onDismiss()
+                }
+            
+            VStack(alignment: .leading, spacing: 8) {
+                if !annotation.note.isEmpty {
+                    Text(annotation.note)
+                        .font(.system(size: 14))
+                        .foregroundColor(.primary)
+                        .lineLimit(nil)
+                }
+                
+                if !annotation.tags.isEmpty {
+                    HStack(spacing: 4) {
+                        ForEach(annotation.tags, id: \.self) { tag in
+                            Text(tag)
+                                .font(.system(size: 12))
+                                .foregroundColor(.blue)
+                                .padding(EdgeInsets(top: 2, leading: 6, bottom: 2, trailing: 6))
+                                .background(Color.blue.opacity(0.1))
+                                .cornerRadius(10)
+                        }
+                    }
+                }
+                
+                HStack(spacing: 16) {
+                    Text(formatDate(annotation.createdTime))
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                    
+                    Spacer()
+                    
+                    HStack(spacing: 8) {
+                        Button(action: {
+                            showActions.toggle()
+                        }) {
+                            Image(systemName: "ellipsis")
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        if showActions {
+                            HStack(spacing: 8) {
+                                Button(action: {
+                                    onEdit(annotation)
+                                    showActions = false
+                                }) {
+                                    Image(systemName: "pencil")
+                                        .foregroundColor(.blue)
+                                }
+                                
+                                Button(action: {
+                                    onDelete(annotation)
+                                }) {
+                                    Image(systemName: "trash")
+                                        .foregroundColor(.red)
+                                }
+                            }
+                            .transition(.scale)
+                        }
+                    }
+                }
+            }
+            .padding(12)
+            .background(Color(.systemBackground))
+            .cornerRadius(12)
+            .shadow(radius: 10)
+            .position(position)
+            .transition(.scale.combined(with: .opacity))
+        }
+    }
+    
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+}
+
+struct AnnotationPopupMenuOverlay: View {
+    let position: CGPoint
+    let selectedText: String
+    let onHighlight: () -> Void
+    let onAddNote: () -> Void
+    let onCopy: () -> Void
+    let onShare: () -> Void
+    let onDismiss: () -> Void
+    
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.3)
+                .onTapGesture {
+                    onDismiss()
+                }
+            
+            VStack(spacing: 0) {
+                if !selectedText.isEmpty {
+                    Text(selectedText)
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                        .padding(12)
+                        .lineLimit(3)
+                    
+                    Divider()
+                }
+                
+                VStack(spacing: 0) {
+                    menuButton(icon: "highlighter", title: "高亮", action: onHighlight)
+                    Divider()
+                    menuButton(icon: "note.text", title: "添加笔记", action: onAddNote)
+                    Divider()
+                    menuButton(icon: "doc.on.doc", title: "复制", action: onCopy)
+                    Divider()
+                    menuButton(icon: "square.and.arrow.up", title: "分享", action: onShare)
+                }
+            }
+            .background(Color(.systemBackground))
+            .cornerRadius(12)
+            .shadow(radius: 10)
+            .position(position)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+    
+    private func menuButton(icon: String, title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .frame(width: 24, height: 24)
+                    .foregroundColor(.blue)
+                Text(title)
+                    .font(.system(size: 14))
+                    .foregroundColor(.primary)
+                Spacer()
+            }
+            .padding(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
         }
     }
 }
