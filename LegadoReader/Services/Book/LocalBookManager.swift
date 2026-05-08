@@ -192,7 +192,7 @@ class LocalBookManager: ObservableObject {
     private func readEPUBBook(_ book: LocalBook) -> (chapters: [String], content: String) {
         do {
             let epubData = try Data(contentsOf: URL(fileURLWithPath: book.path))
-            let epub = EPUBParser(data: epubData)
+            let epub = LocalEPUBParser(data: epubData)
             return try epub.parse()
         } catch {
             print("EPUB解析失败: \(error)")
@@ -292,7 +292,7 @@ class LocalBookManager: ObservableObject {
     }
 }
 
-class EPUBParser {
+class LocalEPUBParser {
     private let data: Data
     
     init(data: Data) {
