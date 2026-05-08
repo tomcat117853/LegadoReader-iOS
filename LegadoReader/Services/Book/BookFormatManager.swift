@@ -214,45 +214,106 @@ class BookFormatManager: ObservableObject {
         return detectFormat(from: data) != nil
     }
     
-    func getReader(for format: BookFormat) -> BookReaderProtocol? {
-        switch format.id {
+    func getReader(for formatId: String) -> LazyBookProtocol? {
+        switch formatId {
         case "epub":
-            return EPUBReader()
+            return LazyEPUBBook(id: "temp_\(UUID().uuidString)", data: Data())
         case "pdf":
-            return PDFReader()
+            return LazyPDFBook(id: "temp_\(UUID().uuidString)", data: Data())
         case "mobi", "azw":
-            return MOBIReader()
+            return LazyAZWBook(id: "temp_\(UUID().uuidString)", data: Data())
         case "fb2":
-            return FB2Reader()
+            return LazyFB2Book(id: "temp_\(UUID().uuidString)", data: Data())
         case "txt":
-            return TXTReader()
+            return LazyTXTBook(id: "temp_\(UUID().uuidString)", data: Data())
         case "chm":
-            return CHMReader()
+            return LazyCHMBook(id: "temp_\(UUID().uuidString)", data: Data())
         case "rtf":
-            return RTFReader()
+            return LazyRTFBook(id: "temp_\(UUID().uuidString)", data: Data())
         case "html":
-            return HTMLReader()
+            return LazyHTMLBook(id: "temp_\(UUID().uuidString)", data: Data())
         default:
             return nil
         }
     }
     
+    func loadBook(data: Data, format: BookFormat) async throws -> LazyBookProtocol? {
+        let formatId = format.id
+        guard let book = getReader(for: formatId) else { return nil }
+        
+        let tempId = "temp_\(UUID().uuidString)"
+        let lazyBook: LazyBookProtocol
+        
+        switch formatId {
+        case "epub":
+            lazyBook = LazyEPUBBook(id: tempId, data: data)
+        case "pdf":
+            lazyBook = LazyPDFBook(id: tempId, data: data)
+        case "mobi", "azw":
+            lazyBook = LazyAZWBook(id: tempId, data: data)
+        case "fb2":
+            lazyBook = LazyFB2Book(id: tempId, data: data)
+        case "txt":
+            lazyBook = LazyTXTBook(id: tempId, data: data)
+        case "chm":
+            lazyBook = LazyCHMBook(id: tempId, data: data)
+        case "rtf":
+            lazyBook = LazyRTFBook(id: tempId, data: data)
+        case "html":
+            lazyBook = LazyHTMLBook(id: tempId, data: data)
+        default:
+            return nil
+        }
+        
+        try await lazyBook.loadMetadata()
+        return lazyBook
+    }
+    
     func convert(_ data: Data, from sourceFormat: BookFormat, to targetFormat: BookFormat) async throws -> Data {
-        let reader = getReader(for: sourceFormat)
-        let content = try await reader?.read(data: data) ?? BookContent()
+        guard let book = try await loadBook(data: data, format: sourceFormat) else {
+            throw ConversionError.unsupportedFormat
+        }
+        
+        var content = BookContent()
+        content.title = book.bookTitle
+        content.author = book.bookAuthor
+        
+        for i in 0..<book.chaptersCount {
+            if let chapter = try? await book.loadChapter(at: i) {
+                content.chapters.append(BookChapter(
+                    title: chapter.title,
+                    content: chapter.content,
+                    level: 1
+                ))
+            }
+        }
         
         let converter = BookConverter()
         return try await converter.convert(content, to: targetFormat)
     }
     
     func extractCover(data: Data, format: BookFormat) -> Data? {
-        let reader = getReader(for: format)
-        return reader?.extractCover(data: data)
+        Task {
+            if let book = try? await loadBook(data: data, format: format) {
+                return book.coverImage
+            }
+        }
+        return nil
     }
     
     func getMetadata(data: Data, format: BookFormat) -> BookMetadata {
-        let reader = getReader(for: format)
-        return reader?.getMetadata(data: data) ?? BookMetadata()
+        Task {
+            if let book = try? await loadBook(data: data, format: format) {
+                return BookMetadata(
+                    title: book.bookTitle,
+                    author: book.bookAuthor,
+                    publisher: "",
+                    description: "",
+                    language: ""
+                )
+            }
+        }
+        return BookMetadata()
     }
     
     func listSupportedFormats() -> [BookFormat] {
@@ -279,11 +340,9 @@ class BookFormatManager: ObservableObject {
     }
 }
 
-protocol BookReaderProtocol {
-    func read(data: Data) async throws -> BookContent
-    func extractCover(data: Data) -> Data?
-    func getMetadata(data: Data) -> BookMetadata
-    func getTableOfContents(data: Data) -> [BookChapter]
+enum ConversionError: Error {
+    case unsupportedFormat
+    case conversionFailed
 }
 
 struct BookContent {
