@@ -581,16 +581,3 @@ struct TipRow: View {
         }
     }
 }
-
-struct EyeCareOverlayView: View {
-    @StateObject private var eyeCareManager = EyeCareManager.shared
-    
-    var body: some View {
-        if eyeCareManager.isEyeCareEnabled && eyeCareManager.overlayOpacity > 0 {
-            Rectangle()
-                .fill(eyeCareManager.overlayColor)
-                .opacity(eyeCareManager.overlayOpacity)
-                .allowsHitTesting(false)
-        }
-    }
-}
