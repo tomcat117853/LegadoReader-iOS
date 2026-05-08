@@ -25,6 +25,21 @@
 - **WebDAV 同步**: 支持 WebDAV 服务器同步数据
 - **Web 服务 API**: RESTful API 接口，支持远程管理
 
+### 新增功能
+- **标注笔记**: 支持下划线、波浪线、虚线、高亮等多种标注样式
+- **书签管理**: 书签添加、编辑、备注功能
+- **全书页数显示**: 可配置显示全书总页数
+- **智能替换**: 自动修正图片、标注等位置，不会因替换而导入错位
+- **TXT导入优化**: 支持自定义分卷标志，解析更加精准
+- **EPUB优化**: 支持书籍标签，自适应图片，夜间图片优化
+- **书籍导出**: 支持文本、图片、样式、笔记等多种导出格式
+- **护眼模式**: 多种护眼配色方案，保护眼睛健康
+- **书籍加密**: 不同密码显示不同内容，保护隐私
+- **分组管理**: 书籍分组管理，支持按阅读/听书时长排序
+- **压缩包支持**: 支持 RAR、ZIP 格式自动识别导入
+- **标题格式化**: 自动格式化书籍章节标题
+- **听书跟随**: 听书时自动跟随朗读进度
+
 ### 阅读器特性
 - 多种背景颜色（白天、护眼、清新、夜间、纯黑）
 - 字体大小调节（12-32pt）
@@ -33,6 +48,7 @@
 - 章节导航
 - 阅读进度保存
 - 屏幕常亮选项
+- 上下滑动（连续）翻页模式
 
 ## 技术架构
 
@@ -46,35 +62,51 @@
 ### 项目结构
 ```
 LegadoReader/
-├── Models/                 # 数据模型
-│   ├── Book.swift         # 书籍模型
-│   ├── BookSource.swift   # 书源模型
-│   ├── RSSSource.swift    # 订阅源模型
-│   └── ReaderSettings.swift # 阅读设置
-├── Views/                 # UI 视图
-│   ├── SearchView.swift   # 搜索页面
-│   ├── BookDetailView.swift # 书籍详情
-│   ├── ReaderView.swift   # 阅读器
-│   ├── DiscoverView.swift # 发现页面
-│   ├── RSSView.swift      # 订阅页面
-│   ├── SourceManagementView.swift # 书源管理
-│   ├── SettingsView.swift # 设置页面
-│   ├── LocalBooksView.swift # 本地书籍
-│   ├── PageTurnView.swift # 翻页效果
-│   └── ThemeSettingsView.swift # 主题设置
-├── ViewModels/            # 视图模型
-│   ├── BookStore.swift    # 书籍数据管理
-│   └── SourceStore.swift  # 书源数据管理
-├── Services/              # 服务层
-│   ├── DatabaseManager.swift # 数据库管理
-│   ├── BookSourceParser.swift # 书源解析引擎
-│   ├── ReadingProgressSync.swift # 阅读进度同步
-│   ├── CloudSyncManager.swift # 云同步管理
-│   ├── AudioBookManager.swift # 听书功能
-│   ├── ThemeManager.swift # 主题管理
-│   ├── LocalBookManager.swift # 本地书籍管理
-│   ├── ChineseConverter.swift # 简繁转换
-│   └── WebDAVManager.swift # WebDAV 同步
+├── Models/                 # 数据模型（按功能分类）
+│   ├── Book/              # 书籍相关
+│   │   ├── Book.swift
+│   │   ├── BookGroup.swift
+│   │   └── BookSource.swift
+│   ├── Common/            # 通用模型
+│   │   └── Bookmark.swift
+│   ├── Reading/           # 阅读相关
+│   │   ├── ReaderSettings.swift
+│   │   └── ReadingEnhancement.swift
+│   ├── RSS/               # RSS订阅
+│   │   └── RSSSource.swift
+│   └── Search/            # 搜索相关
+│       └── MultiLevelChapter.swift
+├── Views/                  # UI 视图（按功能分类）
+│   ├── Archive/           # 归档管理
+│   ├── Audio/             # 听书功能
+│   ├── AudioSource/        # 音频源
+│   ├── Book/              # 书籍相关
+│   ├── Common/            # 通用组件（18个文件）
+│   ├── OPDS/              # OPDS订阅
+│   ├── Other/             # 其他功能（13个文件）
+│   ├── Reader/            # 阅读器核心
+│   └── Settings/          # 设置页面
+├── ViewModels/             # 视图模型（按功能分类）
+│   ├── Book/              # 书籍管理
+│   │   └── BookStore.swift
+│   ├── RSS/               # RSS订阅
+│   │   └── RSSViewModel.swift
+│   └── Search/            # 搜索相关
+│       └── SourceStore.swift
+├── Services/               # 服务层（按功能分类）
+│   ├── Annotation/        # 标注笔记
+│   ├── Audio/             # 音频听书
+│   ├── Book/              # 书籍管理
+│   ├── ImportExport/      # 导入导出
+│   ├── Network/           # 网络请求
+│   ├── Other/             # 其他服务
+│   ├── Reading/           # 阅读核心
+│   ├── Search/           # 搜索相关
+│   ├── Settings/          # 设置管理
+│   ├── Storage/           # 存储管理
+│   ├── Sync/              # 同步服务
+│   ├── Utils/             # 工具类
+│   └── WebSocket/          # WebSocket
 └── Resources/             # 资源文件
 ```
 
