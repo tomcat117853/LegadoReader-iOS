@@ -74,6 +74,8 @@ struct BookshelfView: View {
     @State private var selectedTag: String = ""
     @State private var showingGroupSelector = false
     @State private var bookToGroup: Book?
+    @State private var showingBookDetail = false
+    @State private var bookForDetail: Book?
     
     enum BookSortOption: String, CaseIterable, Identifiable {
         case namePinyin = "按书名拼音"
@@ -223,9 +225,9 @@ struct BookshelfView: View {
                             }
                             .frame(maxWidth: .infinity, minHeight: 300)
                         } else if isGridView {
-                            GridBookshelfView(books: filteredBooks, selectedBook: $selectedBook, showingGroupSelector: $showingGroupSelector, bookToGroup: $bookToGroup)
+                            GridBookshelfView(books: filteredBooks, selectedBook: $selectedBook, showingGroupSelector: $showingGroupSelector, bookToGroup: $bookToGroup, showingBookDetail: $showingBookDetail, bookForDetail: $bookForDetail)
                         } else {
-                            ListBookshelfView(books: filteredBooks, selectedBook: $selectedBook, showingGroupSelector: $showingGroupSelector, bookToGroup: $bookToGroup)
+                            ListBookshelfView(books: filteredBooks, selectedBook: $selectedBook, showingGroupSelector: $showingGroupSelector, bookToGroup: $bookToGroup, showingBookDetail: $showingBookDetail, bookForDetail: $bookForDetail)
                         }
                     }
                 }
@@ -308,6 +310,11 @@ struct BookshelfView: View {
             }
             .sheet(item: $bookToGroup) { book in
                 GroupSelectorView(book: book)
+            }
+            .sheet(isPresented: $showingBookDetail) {
+                if let book = bookForDetail {
+                    BookDetailView(book: book)
+                }
             }
         }
     }

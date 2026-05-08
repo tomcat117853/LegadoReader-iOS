@@ -170,6 +170,8 @@ struct GridBookshelfView: View {
     @Binding var selectedBook: Book?
     @Binding var showingGroupSelector: Bool
     @Binding var bookToGroup: Book?
+    @Binding var showingBookDetail: Bool
+    @Binding var bookForDetail: Book?
     @EnvironmentObject var bookStore: BookStore
     
     let columns = [
@@ -188,7 +190,7 @@ struct GridBookshelfView: View {
                         onTop: { moveBookToTop(book) },
                         onListen: { startListening(book) },
                         onGroup: { showGroupSelector(book) },
-                        onDetail: { selectedBook = book },
+                        onDetail: { showBookDetail(book) },
                         onDelete: { deleteBook(book) }
                     ) {
                         BookGridItem(book: book)
@@ -200,6 +202,11 @@ struct GridBookshelfView: View {
             }
             .padding()
         }
+    }
+    
+    private func showBookDetail(_ book: Book) {
+        bookForDetail = book
+        showingBookDetail = true
     }
     
     private func moveBookToTop(_ book: Book) {
@@ -220,11 +227,121 @@ struct GridBookshelfView: View {
     }
 }
 
+struct BookGridItem: View {
+    let book: Book
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.gray.opacity(0.2))
+                    .aspectRatio(3/4, contentMode: .fit)
+                
+                if let cover = book.cover, let url = URL(string: cover) {
+                    AsyncImage(url: url) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        ProgressView()
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                } else {
+                    VStack {
+                        Image(systemName: "book.fill")
+                            .font(.system(size: 40))
+                            .foregroundColor(.gray)
+                        Text(book.name.prefix(1))
+                            .font(.title)
+                            .foregroundColor(.gray)
+                    }
+                }
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.gray.opacity(0.3), lineWidth: 0.5)
+            )
+            
+            Text(book.name)
+                .font(.system(size: 14, weight: .medium))
+                .lineLimit(1)
+                .foregroundColor(.primary)
+            
+            Text(book.lastChapter ?? book.author)
+                .font(.system(size: 12))
+                .lineLimit(1)
+                .foregroundColor(.secondary)
+        }
+        .padding(.horizontal, 8)
+    }
+}
+
+struct BookListItem: View {
+    let book: Book
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(width: 60, height: 80)
+                
+                if let cover = book.cover, let url = URL(string: cover) {
+                    AsyncImage(url: url) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        ProgressView()
+                    }
+                    .frame(width: 60, height: 80)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                } else {
+                    Image(systemName: "book.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(.gray)
+                }
+            }
+            
+            VStack(alignment: .leading, spacing: 6) {
+                Text(book.name)
+                    .font(.system(size: 16, weight: .semibold))
+                    .lineLimit(1)
+                
+                Text(book.author)
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                
+                if let lastChapter = book.lastChapter {
+                    Text("更新至: \(lastChapter)")
+                        .font(.system(size: 12))
+                        .foregroundColor(.blue)
+                        .lineLimit(1)
+                }
+                
+                if let lastRead = book.lastReadChapter {
+                    Text("读至: \(lastRead)")
+                        .font(.system(size: 12))
+                        .foregroundColor(.orange)
+                        .lineLimit(1)
+                }
+            }
+            
+            Spacer()
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 16)
+    }
+}
+
 struct ListBookshelfView: View {
     let books: [Book]
     @Binding var selectedBook: Book?
     @Binding var showingGroupSelector: Bool
     @Binding var bookToGroup: Book?
+    @Binding var showingBookDetail: Bool
+    @Binding var bookForDetail: Book?
     @EnvironmentObject var bookStore: BookStore
     
     var body: some View {
@@ -235,7 +352,7 @@ struct ListBookshelfView: View {
                 onTop: { moveBookToTop(book) },
                 onListen: { startListening(book) },
                 onGroup: { showGroupSelector(book) },
-                onDetail: { selectedBook = book },
+                onDetail: { showBookDetail(book) },
                 onDelete: { deleteBook(book) }
             ) {
                 BookListItem(book: book)
@@ -246,6 +363,11 @@ struct ListBookshelfView: View {
             }
         }
         .listStyle(.plain)
+    }
+    
+    private func showBookDetail(_ book: Book) {
+        bookForDetail = book
+        showingBookDetail = true
     }
     
     private func moveBookToTop(_ book: Book) {
@@ -263,5 +385,113 @@ struct ListBookshelfView: View {
     
     private func deleteBook(_ book: Book) {
         bookStore.removeBook(book)
+    }
+}
+
+struct BookGridItem: View {
+    let book: Book
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.gray.opacity(0.2))
+                    .aspectRatio(3/4, contentMode: .fit)
+                
+                if let cover = book.cover, let url = URL(string: cover) {
+                    AsyncImage(url: url) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        ProgressView()
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                } else {
+                    VStack {
+                        Image(systemName: "book.fill")
+                            .font(.system(size: 40))
+                            .foregroundColor(.gray)
+                        Text(book.name.prefix(1))
+                            .font(.title)
+                            .foregroundColor(.gray)
+                    }
+                }
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.gray.opacity(0.3), lineWidth: 0.5)
+            )
+            
+            Text(book.name)
+                .font(.system(size: 14, weight: .medium))
+                .lineLimit(1)
+                .foregroundColor(.primary)
+            
+            Text(book.lastChapter ?? book.author)
+                .font(.system(size: 12))
+                .lineLimit(1)
+                .foregroundColor(.secondary)
+        }
+        .padding(.horizontal, 8)
+    }
+}
+
+struct BookListItem: View {
+    let book: Book
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(width: 60, height: 80)
+                
+                if let cover = book.cover, let url = URL(string: cover) {
+                    AsyncImage(url: url) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        ProgressView()
+                    }
+                    .frame(width: 60, height: 80)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                } else {
+                    Image(systemName: "book.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(.gray)
+                }
+            }
+            
+            VStack(alignment: .leading, spacing: 6) {
+                Text(book.name)
+                    .font(.system(size: 16, weight: .semibold))
+                    .lineLimit(1)
+                
+                Text(book.author)
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                
+                if let lastChapter = book.lastChapter {
+                    Text("更新至: \(lastChapter)")
+                        .font(.system(size: 12))
+                        .foregroundColor(.blue)
+                        .lineLimit(1)
+                }
+                
+                if let lastRead = book.lastReadChapter {
+                    Text("读至: \(lastRead)")
+                        .font(.system(size: 12))
+                        .foregroundColor(.orange)
+                        .lineLimit(1)
+                }
+            }
+            
+            Spacer()
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 16)
     }
 }
