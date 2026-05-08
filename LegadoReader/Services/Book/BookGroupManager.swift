@@ -340,20 +340,23 @@ class BookGroupManager: BaseService, ObservableObject {
     }
     
     func hasGlobalPassword() -> Bool {
-        return UserDefaults.standard.string(forKey: "BookGroupGlobalPassword") != nil
+        return KeychainHelper.exists(for: "BookGroupGlobalPassword")
     }
     
     func setGlobalPassword(_ password: String) {
-        UserDefaults.standard.set(password, forKey: "BookGroupGlobalPassword")
+        try? KeychainHelper.save(password, for: "BookGroupGlobalPassword")
         logInfo("Set global password")
     }
     
     func verifyGlobalPassword(_ password: String) -> Bool {
-        return UserDefaults.standard.string(forKey: "BookGroupGlobalPassword") == password
+        guard let storedPassword = KeychainHelper.load(for: "BookGroupGlobalPassword") else {
+            return false
+        }
+        return storedPassword == password
     }
     
     func removeGlobalPassword() {
-        UserDefaults.standard.removeObject(forKey: "BookGroupGlobalPassword")
+        try? KeychainHelper.delete(for: "BookGroupGlobalPassword")
         logInfo("Removed global password")
     }
 }

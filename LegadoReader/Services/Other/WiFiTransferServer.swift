@@ -73,7 +73,7 @@ class WiFiTransferServer: NSObject, ObservableObject {
     }
     
     func loadPassword() {
-        if let password = UserDefaults.standard.string(forKey: passwordKey) {
+        if let password = KeychainHelper.load(for: passwordKey) {
             serverPassword = password
             isPasswordEnabled = !password.isEmpty
         }
@@ -81,13 +81,13 @@ class WiFiTransferServer: NSObject, ObservableObject {
     
     func setPassword(_ password: String) {
         serverPassword = password
-        UserDefaults.standard.set(password, forKey: passwordKey)
+        try? KeychainHelper.save(password, for: passwordKey)
         isPasswordEnabled = !password.isEmpty
     }
     
     func clearPassword() {
         serverPassword = ""
-        UserDefaults.standard.removeObject(forKey: passwordKey)
+        try? KeychainHelper.delete(for: passwordKey)
         isPasswordEnabled = false
     }
     

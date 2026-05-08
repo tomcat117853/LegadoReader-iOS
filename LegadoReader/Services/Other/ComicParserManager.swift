@@ -151,6 +151,10 @@ class ComicParserManager: BaseService, ObservableObject {
         let tempDir = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try fileManager.createDirectory(at: tempDir, withIntermediateDirectories: true)
         
+        guard fileManager.fileExists(atPath: url.path) else {
+            throw ComicParserError.fileNotFound
+        }
+        
         SSZipArchive.unzipFile(atPath: url.path, toDestination: tempDir.path)
         
         let images = extractImages(from: tempDir)
@@ -185,9 +189,16 @@ class ComicParserManager: BaseService, ObservableObject {
         let tempDir = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try fileManager.createDirectory(at: tempDir, withIntermediateDirectories: true)
         
+        guard fileManager.fileExists(atPath: url.path) else {
+            throw ComicParserError.fileNotFound
+        }
+        
+        let sanitizedArchivePath = sanitizePathForShell(url.path)
+        let sanitizedTempPath = sanitizePathForShell(tempDir.path)
+        
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/unrar")
-        process.arguments = ["x", "-o+", url.path, tempDir.path]
+        process.arguments = ["x", "-o+", sanitizedArchivePath, sanitizedTempPath]
         try process.run()
         process.waitUntilExit()
         
@@ -223,9 +234,16 @@ class ComicParserManager: BaseService, ObservableObject {
         let tempDir = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try fileManager.createDirectory(at: tempDir, withIntermediateDirectories: true)
         
+        guard fileManager.fileExists(atPath: url.path) else {
+            throw ComicParserError.fileNotFound
+        }
+        
+        let sanitizedArchivePath = sanitizePathForShell(url.path)
+        let sanitizedTempPath = sanitizePathForShell(tempDir.path)
+        
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/7z")
-        process.arguments = ["x", "-o" + tempDir.path, url.path]
+        process.arguments = ["x", "-o" + sanitizedTempPath, sanitizedArchivePath]
         try process.run()
         process.waitUntilExit()
         
@@ -407,11 +425,27 @@ class ComicParserManager: BaseService, ObservableObject {
         extractedPath = nil
     }
     
-    enum ComicError: Error {
+    enum ComicParserError: Error {
+        case fileNotFound
         case invalidFormat
         case extractionFailed
         case noImagesFound
-        case fileNotFound
+        case pathTraversalDetected
+    }
+    
+    private func sanitizePathForShell(_ path: String) -> String {
+        let dangerousChars = [";", "&", "|", "`", "$", "(", ")", "<", ">", "\n", "\r", "\t", "'", "\"", "\\"]
+        var sanitized = path
+        for char in dangerousChars {
+            sanitized = sanitized.replacingOccurrences(of: char, with: "_")
+        }
+        if sanitized.contains("..") {
+            sanitized = sanitized.replacingOccurrences(of: "..", with: "__")
+        }
+        if sanitized.hasPrefix("-") {
+            sanitized = "_" + sanitized.dropFirst()
+        }
+        return sanitized
     }
 }
 
