@@ -40,6 +40,7 @@ struct UniversalReaderView: View {
     @State private var showingAnnotationPopup = false
     @State private var selectedAnnotation: AnnotationService.Annotation?
     @State private var isBrightnessAdjusting = false
+    @State private var showingSourceSelector = false
     
     private var isLazyBookMode: Bool {
         if case .lazyBook = readerMode { return true }
@@ -121,7 +122,8 @@ struct UniversalReaderView: View {
                         chapterTitle: currentChapterTitle,
                         onBack: { dismiss() },
                         onShowChapters: { showingChapterList = true },
-                        onShowSettings: { showingSettings = true }
+                        onShowSettings: { showingSettings = true },
+                        onSelectSource: { showingSourceSelector = true }
                     )
                     .background(backgroundColor.opacity(0.95))
                     
@@ -135,17 +137,28 @@ struct UniversalReaderView: View {
                             onPrevious: loadPreviousChapter,
                             onNext: loadNextChapter,
                             onAudioBook: { showingAudioBook = true },
-                            onAutoScroll: { showingAutoScroll = true }
+                            onAutoScroll: { showingAutoScroll = true },
+                            onShowChapters: { showingChapterList = true },
+                            onCache: {},
+                            onPageTurn: {},
+                            onSettings: { showingSettings = true },
+                            progress: Double(currentChapterIndex) / Double(readerMode.lazyBook?.chaptersCount ?? 1)
                         )
                         .background(backgroundColor.opacity(0.95))
                     } else {
                         ReaderBottomBar(
                             currentChapter: currentChapter,
                             totalChapters: chapters.count,
+                            currentIndex: currentChapterIndex,
                             onPrevious: loadPreviousChapter,
                             onNext: loadNextChapter,
                             onAudioBook: { showingAudioBook = true },
-                            onAutoScroll: { showingAutoScroll = true }
+                            onAutoScroll: { showingAutoScroll = true },
+                            onShowChapters: { showingChapterList = true },
+                            onCache: {},
+                            onPageTurn: {},
+                            onSettings: { showingSettings = true },
+                            progress: Double(currentChapterIndex) / Double(max(chapters.count, 1))
                         )
                         .background(backgroundColor.opacity(0.95))
                     }
@@ -167,6 +180,9 @@ struct UniversalReaderView: View {
         }
         .sheet(isPresented: $showingAutoScroll) {
             AutoScrollSettingsView(manager: autoScrollManager)
+        }
+        .sheet(isPresented: $showingSourceSelector) {
+            BookSourceSelectorView(bookName: currentBookTitle)
         }
         .sheet(isPresented: $showingStatistics) {
             if let lazyBook = readerMode.lazyBook {
