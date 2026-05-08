@@ -157,7 +157,13 @@
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsArbitraryLoads</key>
-        <true/>
+        <false/>
     </dict>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>用于语音搜索和听书功能</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>用于保存书籍封面和阅读截图</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>用于访问本地书籍图片</string>
 </dict>
 </plist>

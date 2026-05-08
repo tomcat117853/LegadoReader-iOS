@@ -542,6 +542,12 @@ class WiFiTransferServer: NSObject, ObservableObject {
                     handleFiles(fileInput.files);
                 });
                 
+                function escapeHTML(str) {
+                    const div = document.createElement('div');
+                    div.textContent = str;
+                    return div.innerHTML;
+                }
+                
                 async function handleFiles(files) {
                     fileList.innerHTML = '';
                     
@@ -558,9 +564,10 @@ class WiFiTransferServer: NSObject, ObservableObject {
                     
                     const item = document.createElement('div');
                     item.className = 'file-item';
+                    const safeName = escapeHTML(file.name);
                     item.innerHTML = \`
                         <div>
-                            <div class="file-name">\${file.name}</div>
+                            <div class="file-name">\${safeName}</div>
                             <div class="file-size">正在上传... 0%</div>
                         </div>
                         <span class="status" style="background: #fff3cd; color: #856404;">上传中</span>
@@ -577,27 +584,31 @@ class WiFiTransferServer: NSObject, ObservableObject {
                         const result = await response.json();
                         
                         if (result.success) {
+                            const safeFileName = escapeHTML(result.fileName);
+                            const safeSize = formatSize(result.fileSize);
                             item.innerHTML = \`
                                 <div>
-                                    <div class="file-name">\${result.fileName}</div>
-                                    <div class="file-size">\${formatSize(result.fileSize)}</div>
+                                    <div class="file-name">\${safeFileName}</div>
+                                    <div class="file-size">\${safeSize}</div>
                                 </div>
                                 <span class="status success">成功</span>
                             \`;
                         } else {
+                            const safeMsg = escapeHTML(result.message);
                             item.innerHTML = \`
                                 <div>
-                                    <div class="file-name">\${file.name}</div>
-                                    <div class="file-size">\${result.message}</div>
+                                    <div class="file-name">\${safeName}</div>
+                                    <div class="file-size">\${safeMsg}</div>
                                 </div>
                                 <span class="status" style="background: #f8d7da; color: #721c24;">失败</span>
                             \`;
                         }
                     } catch (error) {
+                        const safeError = escapeHTML(error.message);
                         item.innerHTML = \`
                             <div>
-                                <div class="file-name">\${file.name}</div>
-                                <div class="file-size">上传失败: \${error.message}</div>
+                                <div class="file-name">\${safeName}</div>
+                                <div class="file-size">上传失败: \${safeError}</div>
                             </div>
                             <span class="status" style="background: #f8d7da; color: #721c24;">失败</span>
                         \`;
@@ -621,10 +632,12 @@ class WiFiTransferServer: NSObject, ObservableObject {
                             files.forEach(file => {
                                 const item = document.createElement('div');
                                 item.className = 'file-item';
+                                const safeName = escapeHTML(file.name);
+                                const safeSize = formatSize(file.size);
                                 item.innerHTML = \`
                                     <div>
-                                        <div class="file-name">\${file.name}</div>
-                                        <div class="file-size">\${formatSize(file.size)}</div>
+                                        <div class="file-name">\${safeName}</div>
+                                        <div class="file-size">\${safeSize}</div>
                                     </div>
                                     <span class="status success">已接收</span>
                                 \`;
