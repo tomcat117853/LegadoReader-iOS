@@ -3,7 +3,7 @@ import UIKit
 import WebKit
 
 struct EPUBCSSReaderView: View {
-    let book: EPUBParser.EPUBBook
+    let book: LazyEPUBBook
     @Binding var currentChapterIndex: Int
     @StateObject private var readerSettings = ReaderSettings.shared
     @StateObject private var eyeCareManager = EyeCareManager.shared
@@ -76,7 +76,7 @@ struct EPUBCSSReaderView: View {
 }
 
 struct EPUBChapterView: View {
-    let chapter: EPUBParser.EPUBChapter
+    let chapter: EPUBChapter
     let stylesheets: [CSSParser.ParsedCSS]
     let baseURL: URL?
     let readerSettings: ReaderSettings
