@@ -66,19 +66,54 @@ struct BookshelfView: View {
     @State private var isSearchActive = false
     @State private var scrollOffset: CGFloat = 0
     @State private var lastScrollOffset: CGFloat = 0
+    @State private var sortOption: BookSortOption = .namePinyin
+    @State private var showingSortOptions = false
+    
+    enum BookSortOption: String, CaseIterable, Identifiable {
+        case namePinyin = "按书名拼音"
+        case authorPinyin = "按作者拼音"
+        case lastRead = "最近阅读"
+        case addedTime = "添加时间"
+        case name = "书名排序"
+        
+        var id: String { rawValue }
+        
+        var icon: String {
+            switch self {
+            case .namePinyin: return "textformat.abc"
+            case .authorPinyin: return "person"
+            case .lastRead: return "clock"
+            case .addedTime: return "calendar"
+            case .name: return "textformat"
+            }
+        }
+    }
+    
+    private func sortBooks(_ books: [Book]) -> [Book] {
+        switch sortOption {
+        case .namePinyin:
+            return books.sorted { PinyinUtil.getPinyin(for: $0.name) < PinyinUtil.getPinyin(for: $1.name) }
+        case .authorPinyin:
+            return books.sorted { PinyinUtil.getPinyin(for: $0.author) < PinyinUtil.getPinyin(for: $1.author) }
+        case .lastRead:
+            return books.sorted { ($0.lastReadTime ?? .distantPast) > ($1.lastReadTime ?? .distantPast) }
+        case .addedTime:
+            return books.sorted { $0.addedTime > $1.addedTime }
+        case .name:
+            return books.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        }
+    }
     
     private var filteredBooks: [Book] {
-        if searchText.isEmpty {
-            return bookStore.books
-        }
-        let query = searchText.lowercased()
-        return bookStore.books.filter { book in
-            book.name.lowercased().contains(query) ||
+        var books = searchText.isEmpty ? bookStore.books : bookStore.books.filter { book in
+            let query = searchText.lowercased()
+            return book.name.lowercased().contains(query) ||
             book.author.lowercased().contains(query) ||
             (book.kind?.lowercased().contains(query) ?? false) ||
             (book.intro?.lowercased().contains(query) ?? false) ||
             (book.sourceName.lowercased().contains(query))
         }
+        return sortBooks(books)
     }
     
     var body: some View {
@@ -131,6 +166,30 @@ struct BookshelfView: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: { isGridView.toggle() }) {
                         Image(systemName: isGridView ? "list.bullet" : "square.grid.2x2")
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Menu {
+                        ForEach(BookSortOption.allCases) { option in
+                            Button(action: {
+                                sortOption = option
+                            }) {
+                                HStack {
+                                    Image(systemName: option.icon)
+                                    Text(option.rawValue)
+                                    if sortOption == option {
+                                        Spacer()
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.up.arrow.down")
+                            Image(systemName: "chevron.down")
+                                .font(.caption2)
+                        }
                     }
                 }
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
