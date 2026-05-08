@@ -14,54 +14,40 @@ struct ContentView: View {
                 }
                 .tag(0)
             
-            DiscoverView()
+            ExploreView()
                 .tabItem {
                     Image(systemName: "safari.fill")
-                    Text("发现")
+                    Text("探索")
                 }
                 .tag(1)
             
-            RSSView()
-                .tabItem {
-                    Image(systemName: "newspaper.fill")
-                    Text("订阅")
-                }
-                .tag(2)
-            
-            LocalBooksView()
+            LibraryView()
                 .tabItem {
                     Image(systemName: "folder.fill")
                     Text("本地")
                 }
-                .tag(3)
+                .tag(2)
             
             ReadingProgressView()
                 .tabItem {
                     Image(systemName: "clock.fill")
                     Text("阅读")
                 }
-                .tag(4)
-            
-            SourceManagementView()
-                .tabItem {
-                    Image(systemName: "server.rack")
-                    Text("书源")
-                }
-                .tag(5)
+                .tag(3)
             
             ComicBookshelfView()
                 .tabItem {
                     Image(systemName: "photo.on.rectangle")
                     Text("漫画")
                 }
-                .tag(6)
+                .tag(4)
             
             SettingsView()
                 .tabItem {
                     Image(systemName: "gear")
                     Text("设置")
                 }
-                .tag(7)
+                .tag(5)
         }
         .accentColor(.blue)
     }
