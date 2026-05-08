@@ -72,6 +72,8 @@ struct BookshelfView: View {
     @State private var showingFilterSheet = false
     @State private var selectedAuthor: String = ""
     @State private var selectedTag: String = ""
+    @State private var showingGroupSelector = false
+    @State private var bookToGroup: Book?
     
     enum BookSortOption: String, CaseIterable, Identifiable {
         case namePinyin = "按书名拼音"
@@ -221,9 +223,9 @@ struct BookshelfView: View {
                             }
                             .frame(maxWidth: .infinity, minHeight: 300)
                         } else if isGridView {
-                            GridBookshelfView(books: filteredBooks, selectedBook: $selectedBook)
+                            GridBookshelfView(books: filteredBooks, selectedBook: $selectedBook, showingGroupSelector: $showingGroupSelector, bookToGroup: $bookToGroup)
                         } else {
-                            ListBookshelfView(books: filteredBooks, selectedBook: $selectedBook)
+                            ListBookshelfView(books: filteredBooks, selectedBook: $selectedBook, showingGroupSelector: $showingGroupSelector, bookToGroup: $bookToGroup)
                         }
                     }
                 }
@@ -303,6 +305,9 @@ struct BookshelfView: View {
                     uniqueAuthors: uniqueAuthors,
                     uniqueTags: uniqueTags
                 )
+            }
+            .sheet(item: $bookToGroup) { book in
+                GroupSelectorView(book: book)
             }
         }
     }
@@ -681,165 +686,6 @@ struct EmptyBookshelfView: View {
                 .font(.subheadline)
                 .foregroundColor(.secondary)
         }
-    }
-}
-
-struct GridBookshelfView: View {
-    let books: [Book]
-    @Binding var selectedBook: Book?
-    @EnvironmentObject var bookStore: BookStore
-    
-    let columns = [
-        GridItem(.flexible()),
-        GridItem(.flexible()),
-        GridItem(.flexible())
-    ]
-    
-    var body: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 16) {
-                ForEach(books) { book in
-                    BookGridItem(book: book)
-                        .onTapGesture {
-                            selectedBook = book
-                        }
-                        .contextMenu {
-                            BookContextMenu(book: book)
-                        }
-                }
-            }
-            .padding()
-        }
-    }
-}
-
-struct BookGridItem: View {
-    let book: Book
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // 封面
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.gray.opacity(0.2))
-                    .aspectRatio(3/4, contentMode: .fit)
-                
-                if let cover = book.cover, let url = URL(string: cover) {
-                    AsyncImage(url: url) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        ProgressView()
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                } else {
-                    VStack {
-                        Image(systemName: "book.fill")
-                            .font(.system(size: 40))
-                            .foregroundColor(.gray)
-                        Text(book.name.prefix(1))
-                            .font(.title)
-                            .foregroundColor(.gray)
-                    }
-                }
-            }
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.gray.opacity(0.3), lineWidth: 0.5)
-            )
-            
-            // 书名
-            Text(book.name)
-                .font(.system(size: 14, weight: .medium))
-                .lineLimit(1)
-                .foregroundColor(.primary)
-            
-            // 作者或最新章节
-            Text(book.lastChapter ?? book.author)
-                .font(.system(size: 12))
-                .lineLimit(1)
-                .foregroundColor(.secondary)
-        }
-    }
-}
-
-struct ListBookshelfView: View {
-    let books: [Book]
-    @Binding var selectedBook: Book?
-    @EnvironmentObject var bookStore: BookStore
-    
-    var body: some View {
-        List(books) { book in
-            BookListItem(book: book)
-                .onTapGesture {
-                    selectedBook = book
-                }
-                .contextMenu {
-                    BookContextMenu(book: book)
-                }
-        }
-        .listStyle(.plain)
-    }
-}
-
-struct BookListItem: View {
-    let book: Book
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            // 封面
-            ZStack {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.gray.opacity(0.2))
-                    .frame(width: 60, height: 80)
-                
-                if let cover = book.cover, let url = URL(string: cover) {
-                    AsyncImage(url: url) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        ProgressView()
-                    }
-                    .frame(width: 60, height: 80)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                } else {
-                    Image(systemName: "book.fill")
-                        .font(.system(size: 24))
-                        .foregroundColor(.gray)
-                }
-            }
-            
-            // 信息
-            VStack(alignment: .leading, spacing: 6) {
-                Text(book.name)
-                    .font(.system(size: 16, weight: .semibold))
-                    .lineLimit(1)
-                
-                Text(book.author)
-                    .font(.system(size: 14))
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-                
-                if let lastChapter = book.lastChapter {
-                    Text("更新至: \(lastChapter)")
-                        .font(.system(size: 12))
-                        .foregroundColor(.blue)
-                        .lineLimit(1)
-                }
-                
-                if let lastRead = book.lastReadChapter {
-                    Text("读至: \(lastRead)")
-                        .font(.system(size: 12))
-                        .foregroundColor(.orange)
-                        .lineLimit(1)
-                }
-            }
-            
-            Spacer()
-        }
-        .padding(.vertical, 4)
     }
 }
 
