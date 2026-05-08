@@ -54,7 +54,7 @@ struct SettingsView: View {
                     NavigationLink(destination: CloudSyncView()) {
                         HStack {
                             Image(systemName: "icloud.fill")
-                                .foregroundColor(.blue")
+                                .foregroundColor(.blue)
                             Text("iCloud 同步")
                             Spacer()
                             if syncManager.isSyncing {
@@ -62,6 +62,19 @@ struct SettingsView: View {
                             } else if syncManager.syncStatus == .success {
                                 Image(systemName: "checkmark.circle.fill")
                                     .foregroundColor(.green)
+                            }
+                        }
+                    }
+                    
+                    NavigationLink(destination: SyncConfigurationView()) {
+                        HStack {
+                            Image(systemName: "gear.badge")
+                                .foregroundColor(.orange)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("同步配置")
+                                Text("分组、书籍、文件同步方式")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
                             }
                         }
                     }
