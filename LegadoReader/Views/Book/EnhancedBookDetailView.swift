@@ -76,7 +76,7 @@ struct EnhancedBookDetailView: View {
             }
             .sheet(isPresented: $showingReader) {
                 if let source = sourceStore.bookSources.first(where: { $0.url == book.sourceUrl }) {
-                    ReaderView(book: book, source: source)
+                    UniversalReaderView(readerMode: .networkBook(book: book, source: source))
                 }
             }
             .sheet(isPresented: $showingChapterList) {
