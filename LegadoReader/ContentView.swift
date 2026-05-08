@@ -59,23 +59,63 @@ struct BookshelfView: View {
     @EnvironmentObject var bookStore: BookStore
     @StateObject private var notificationManager = UpdateNotificationManager.shared
     @State private var isGridView = true
-    @State private var showingSearch = false
     @State private var showingNotifications = false
     @State private var showingBrowser = false
     @State private var selectedBook: Book?
+    @State private var searchText = ""
+    @State private var isSearchActive = false
+    
+    private var filteredBooks: [Book] {
+        if searchText.isEmpty {
+            return bookStore.books
+        }
+        let query = searchText.lowercased()
+        return bookStore.books.filter { book in
+            book.name.lowercased().contains(query) ||
+            book.author.lowercased().contains(query) ||
+            (book.kind?.lowercased().contains(query) ?? false) ||
+            (book.intro?.lowercased().contains(query) ?? false) ||
+            (book.sourceName.lowercased().contains(query))
+        }
+    }
     
     var body: some View {
         NavigationView {
-            Group {
-                if bookStore.books.isEmpty {
-                    EmptyBookshelfView()
-                } else if isGridView {
-                    GridBookshelfView(books: bookStore.books, selectedBook: $selectedBook)
-                } else {
-                    ListBookshelfView(books: bookStore.books, selectedBook: $selectedBook)
+            VStack(spacing: 0) {
+                PullToSearchView(
+                    searchText: $searchText,
+                    isSearchActive: $isSearchActive,
+                    triggerHeight: 60
+                )
+                
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        if bookStore.books.isEmpty {
+                            EmptyBookshelfView()
+                        } else if filteredBooks.isEmpty {
+                            VStack(spacing: 16) {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 50))
+                                    .foregroundColor(.gray)
+                                Text("未找到匹配书籍")
+                                    .font(.headline)
+                                    .foregroundColor(.gray)
+                                Text("尝试其他关键词")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 300)
+                        } else if isGridView {
+                            GridBookshelfView(books: filteredBooks, selectedBook: $selectedBook)
+                        } else {
+                            ListBookshelfView(books: filteredBooks, selectedBook: $selectedBook)
+                        }
+                    }
+                }
+                .refreshable {
+                    await refreshData()
                 }
             }
-            .navigationTitle("书架")
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: { isGridView.toggle() }) {
@@ -101,13 +141,7 @@ struct BookshelfView: View {
                             }
                         }
                     }
-                    Button(action: { showingSearch = true }) {
-                        Image(systemName: "magnifyingglass")
-                    }
                 }
-            }
-            .sheet(isPresented: $showingSearch) {
-                SearchView()
             }
             .sheet(isPresented: $showingNotifications) {
                 UpdateHistoryView()
@@ -120,6 +154,85 @@ struct BookshelfView: View {
             }
         }
     }
+    
+    private func refreshData() async {
+        try? await Task.sleep(nanoseconds: 500_000_000)
+    }
+}
+
+struct PullToSearchView: View {
+    @Binding var searchText: String
+    @Binding var isSearchActive: Bool
+    let triggerHeight: CGFloat
+    @State private var pullOffset: CGFloat = 0
+    @State private var isPulling = false
+    
+    var body: some View {
+        ZStack {
+            if pullOffset > 0 || isSearchActive {
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.gray)
+                    
+                    TextField("搜索书架", text: $searchText)
+                        .textFieldStyle(.plain)
+                    
+                    if !searchText.isEmpty {
+                        Button(action: { searchText = "" }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.gray)
+                        }
+                    }
+                    
+                    Button("取消") {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            searchText = ""
+                            isSearchActive = false
+                            isPulling = false
+                        }
+                    }
+                    .foregroundColor(.blue)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color(UIColor.secondarySystemBackground))
+                .cornerRadius(10)
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .opacity(isSearchActive ? 1 : min(1, pullOffset / triggerHeight))
+            } else {
+                VStack(spacing: 4) {
+                    Image(systemName: "arrow.down")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    Text("下拉搜索")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                .frame(height: 50)
+            }
+        }
+        .frame(height: isSearchActive ? 60 : (isPulling ? 50 + pullOffset : 50))
+        .offset(y: isPulling ? pullOffset : 0)
+        .gesture(
+            DragGesture()
+                .onChanged { value in
+                    if value.translation.height > 0 && !isSearchActive {
+                        isPulling = true
+                        pullOffset = value.translation.height
+                    }
+                }
+                .onEnded { value in
+                    if value.translation.height > triggerHeight {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isSearchActive = true
+                        }
+                    }
+                    pullOffset = 0
+                    isPulling = false
+                }
+        )
+    }
 }
 
 struct EmptyBookshelfView: View {
@@ -131,7 +244,7 @@ struct EmptyBookshelfView: View {
             Text("书架空空如也")
                 .font(.title2)
                 .foregroundColor(.gray)
-            Text("点击右上角搜索按钮添加书籍")
+            Text("下拉或搜索添加书籍")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
         }

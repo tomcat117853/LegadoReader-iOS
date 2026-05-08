@@ -6,6 +6,7 @@ struct Book: Identifiable, Codable, Equatable {
     var author: String
     var cover: String?
     var intro: String?
+    var kind: String?
     var lastChapter: String?
     var lastReadChapter: String?
     var lastReadPosition: Int
