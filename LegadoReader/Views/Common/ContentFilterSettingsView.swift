@@ -1,273 +1,209 @@
 import SwiftUI
 
 struct ContentFilterSettingsView: View {
-    @StateObject private var filterManager = ContentFilterManager.shared
-    @State private var showingAddFilter = false
-    @State private var selectedCategory: String?
-    
-    var body: some View {
-        NavigationView {
-            List {
-                Section {
-                    HStack {
-                        Text("内容过滤")
-                        Spacer()
-                        Toggle("", isOn: $filterManager.isEnabled)
-                    }
-                } header: {
-                    Text("过滤开关")
-                } footer: {
-                    Text("开启后将自动过滤书籍内容中的广告、水印和低俗内容")
-                }
-                
-                Section {
-                    ForEach(ContentFilterManager.FilterRule.Category.allCases, id: \.id) { category in
-                        NavigationLink(destination: FilterCategoryView(category: category)) {
-                            HStack {
-                                Image(systemName: getCategoryIcon(category))
-                                    .foregroundColor(getCategoryColor(category))
-                                Text(category.displayName)
-                                Spacer()
-                                Text("\(getCategoryFilterCount(category))")
-                                    .foregroundColor(.secondary)
-                                    .font(.caption)
-                            }
-                        }
-                    }
-                } header: {
-                    Text("过滤分类")
-                }
-                
-                Section {
-                    Button("重置为默认规则") {
-                        filterManager.resetToDefaults()
-                    }
-                    .foregroundColor(.red)
-                    
-                    Button("添加自定义规则") {
-                        showingAddFilter = true
-                    }
-                    .foregroundColor(.blue)
-                }
-                
-                Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("过滤统计")
-                            .font(.headline)
-                        
-                        HStack {
-                            Text("总规则数")
-                            Spacer()
-                            Text("\(filterManager.filters.count)")
-                                .foregroundColor(.blue)
-                        }
-                        
-                        HStack {
-                            Text("启用规则")
-                            Spacer()
-                            Text("\(filterManager.getEnabledFilters().count)")
-                                .foregroundColor(.green)
-                        }
-                        
-                        HStack {
-                            Text("禁用规则")
-                            Spacer()
-                            Text("\(filterManager.getDisabledFilters().count)")
-                                .foregroundColor(.orange)
-                        }
-                    }
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
-                } header: {
-                    Text("统计信息")
-                }
-            }
-            .listStyle(.insetGrouped)
-            .navigationTitle("内容过滤")
-            .navigationBarTitleDisplayMode(.inline)
-            .sheet(isPresented: $showingAddFilter) {
-                AddFilterView()
-            }
-        }
-    }
-    
-    private func getCategoryIcon(_ category: ContentFilterManager.FilterRule.Category) -> String {
-        switch category {
-        case .ads: return "xmark.circle"
-        case .vulgar: return "eye.slash"
-        case .watermark: return "strikethrough"
-        case .custom: return "plus.circle"
-        }
-    }
-    
-    private func getCategoryColor(_ category: ContentFilterManager.FilterRule.Category) -> Color {
-        switch category {
-        case .ads: return .red
-        case .vulgar: return .purple
-        case .watermark: return .orange
-        case .custom: return .blue
-        }
-    }
-    
-    private func getCategoryFilterCount(_ category: ContentFilterManager.FilterRule.Category) -> Int {
-        return filterManager.getFiltersByCategory(category.rawValue).count
-    }
-}
-
-struct FilterCategoryView: View {
-    let category: ContentFilterManager.FilterRule.Category
-    @StateObject private var filterManager = ContentFilterManager.shared
-    
-    var categoryFilters: [ContentFilterManager.FilterRule] {
-        filterManager.getFiltersByCategory(category.rawValue)
-    }
-    
-    var body: some View {
-        NavigationView {
-            List {
-                Section {
-                    Button(action: {
-                        filterManager.toggleCategory(category.rawValue)
-                    }) {
-                        HStack {
-                            Text(category.displayName)
-                            Spacer()
-                            Text(categoryFilters.allSatisfy { $0.isEnabled } ? "全部启用" : "部分启用")
-                                .foregroundColor(.secondary)
-                                .font(.caption)
-                        }
-                    }
-                }
-                
-                Section {
-                    ForEach(categoryFilters) { filter in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack {
-                                    Text(filter.name)
-                                    if filter.type == .regex {
-                                        Text("正则")
-                                            .font(.caption2)
-                                            .padding(.horizontal, 4)
-                                            .padding(.vertical, 1)
-                                            .background(Color.blue.opacity(0.2))
-                                            .foregroundColor(.blue)
-                                            .cornerRadius(4)
-                                    }
-                                }
-                                Text(filter.pattern)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .lineLimit(1)
-                            }
-                            
-                            Spacer()
-                            
-                            Toggle("", isOn: Binding(
-                                get: { filter.isEnabled },
-                                set: { enabled in
-                                    if let index = filterManager.filters.firstIndex(where: { $0.id == filter.id }) {
-                                        filterManager.filters[index].isEnabled = enabled
-                                        filterManager.saveFilters()
-                                    }
-                                }
-                            ))
-                        }
-                    }
-                    .onDelete(perform: deleteFilters)
-                } header: {
-                    Text("\(category.displayName)规则 (\(categoryFilters.count))")
-                }
-                
-                if category == .custom {
-                    Section {
-                        Button("添加自定义规则") {
-                            
-                        }
-                        .foregroundColor(.blue)
-                    }
-                }
-            }
-            .listStyle(.insetGrouped)
-            .navigationTitle(category.displayName)
-            .navigationBarTitleDisplayMode(.inline)
-        }
-    }
-    
-    private func deleteFilters(at offsets: IndexSet) {
-        let filtersToDelete = offsets.map { categoryFilters[$0] }
-        filtersToDelete.forEach { filterManager.removeFilter($0) }
-    }
-}
-
-struct AddFilterView: View {
-    @StateObject private var filterManager = ContentFilterManager.shared
     @Environment(\.dismiss) var dismiss
+    @StateObject private var filterManager = ContentFilterManager.shared
+    @State private var searchText = ""
+    @State private var showingMenu = false
+    @State private var showingAddRule = false
     
-    @State private var name = ""
+    var filteredRules: [ContentFilterManager.FilterRule] {
+        if searchText.isEmpty {
+            return filterManager.filters
+        }
+        return filterManager.filters.filter {
+            $0.pattern.lowercased().contains(searchText.lowercased()) ||
+            $0.name.lowercased().contains(searchText.lowercased())
+        }
+    }
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                searchBar
+                
+                List {
+                    ForEach(filteredRules) { rule in
+                        HStack {
+                            Text(formatRule(rule))
+                                .font(.system(size: 15))
+                                .foregroundColor(.primary)
+                                .lineLimit(1)
+                            
+                            Spacer()
+                            
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.secondary)
+                        }
+                        .swipeActions(edge: .leading) {
+                            Button(role: rule.isEnabled ? .destructive : nil) {
+                                toggleRule(rule)
+                            } label: {
+                                Label(rule.isEnabled ? "禁用" : "启用", systemImage: rule.isEnabled ? "xmark.circle" : "checkmark.circle")
+                            }
+                            .tint(rule.isEnabled ? .red : .green)
+                        }
+                    }
+                    .onDelete(perform: deleteRules)
+                }
+                .listStyle(.plain)
+            }
+            .navigationBarTitle("")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "arrow.left")
+                            .foregroundColor(.white)
+                    }
+                }
+                
+                ToolbarItem(placement: .principal) {
+                    Text("内容过滤规则 (共\(filterManager.filters.count)个)")
+                        .font(.title)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Menu {
+                        Button("创建新的过滤规则") {
+                            showingAddRule = true
+                        }
+                        
+                        Divider()
+                        
+                        Button("导出所有") {
+                            exportRules()
+                        }
+                        
+                        Button("反转规则可用性") {
+                            reverseRuleStatus()
+                        }
+                        
+                        Button("删除所有禁用规则") {
+                            removeDisabledRules()
+                        }
+                        
+                        Button("重置规则配置") {
+                            filterManager.resetToDefaults()
+                        }
+                        
+                        Divider()
+                        
+                        Button("帮助") {
+                            showHelp()
+                        }
+                    } label: {
+                        Text("菜单")
+                            .foregroundColor(.white)
+                    }
+                }
+            }
+            .background(Color.red, alignment: .top)
+            .sheet(isPresented: $showingAddRule) {
+                AddFilterRuleView()
+            }
+        }
+    }
+    
+    private var searchBar: some View {
+        TextField("显示包括关键词的过滤规则", text: $searchText)
+            .textFieldStyle(.roundedBorder)
+            .padding()
+            .background(Color(.systemBackground))
+    }
+    
+    private func formatRule(_ rule: ContentFilterManager.FilterRule) -> String {
+        if rule.type == .replace {
+            return "@str:replace(\(rule.pattern),\(rule.replacement))"
+        } else if rule.type == .regex {
+            return "@str:regex(\(rule.pattern),\(rule.replacement))"
+        } else {
+            return "@str:pos(\(rule.pattern))"
+        }
+    }
+    
+    private func toggleRule(_ rule: ContentFilterManager.FilterRule) {
+        if let index = filterManager.filters.firstIndex(where: { $0.id == rule.id }) {
+            filterManager.filters[index].isEnabled.toggle()
+            filterManager.saveFilters()
+        }
+    }
+    
+    private func deleteRules(at offsets: IndexSet) {
+        let rulesToDelete = offsets.map { filteredRules[$0] }
+        rulesToDelete.forEach { filterManager.removeFilter($0) }
+    }
+    
+    private func exportRules() {
+        let json = filterManager.exportRules()
+        print("导出规则: \(json)")
+    }
+    
+    private func reverseRuleStatus() {
+        filterManager.filters.forEach { $0.isEnabled.toggle() }
+        filterManager.saveFilters()
+    }
+    
+    private func removeDisabledRules() {
+        filterManager.filters.removeAll { !$0.isEnabled }
+        filterManager.saveFilters()
+    }
+    
+    private func showHelp() {
+        print("显示帮助")
+    }
+}
+
+struct AddFilterRuleView: View {
+    @Environment(\.dismiss) var dismiss
+    @StateObject private var filterManager = ContentFilterManager.shared
+    
     @State private var pattern = ""
     @State private var replacement = ""
     @State private var type = ContentFilterManager.FilterRule.FilterType.keyword
-    @State private var category = ContentFilterManager.FilterRule.Category.custom
     
     var body: some View {
-        NavigationView {
-            List {
-                Section {
-                    TextField("规则名称", text: $name)
-                } header: {
-                    Text("基本信息")
-                }
-                
-                Section {
-                    Picker("过滤类型", selection: $type) {
-                        ForEach(ContentFilterManager.FilterRule.FilterType.allCases) { type in
-                            Text(type.displayName).tag(type)
-                        }
-                    }
-                }
-                
-                Section {
-                    Picker("分类", selection: $category) {
-                        ForEach(ContentFilterManager.FilterRule.Category.allCases) { category in
-                            Text(category.displayName).tag(category)
-                        }
-                    }
-                }
-                
+        NavigationStack {
+            Form {
                 Section {
                     TextField("匹配内容", text: $pattern)
-                    if type == .regex {
-                        Text("使用正则表达式语法")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
                 } header: {
                     Text("匹配规则")
                 }
                 
                 Section {
                     TextField("替换为", text: $replacement)
-                    Text("留空则删除匹配内容")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
                 } header: {
                     Text("替换内容")
+                } footer: {
+                    Text("留空则删除匹配内容")
                 }
                 
                 Section {
-                    Button("保存规则") {
-                        saveFilter()
+                    Picker("规则类型", selection: $type) {
+                        Text("关键词过滤").tag(ContentFilterManager.FilterRule.FilterType.keyword)
+                        Text("正则替换").tag(ContentFilterManager.FilterRule.FilterType.regex)
+                        Text("文本替换").tag(ContentFilterManager.FilterRule.FilterType.replace)
                     }
-                    .foregroundColor(.blue)
-                    .disabled(name.isEmpty || pattern.isEmpty)
+                }
+                
+                Section {
+                    Button("添加规则") {
+                        addRule()
+                    }
+                    .disabled(pattern.isEmpty)
                 }
             }
-            .listStyle(.insetGrouped)
-            .navigationTitle("添加过滤规则")
+            .navigationTitle("创建新的过滤规则")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .navigationBarLeading) {
                     Button("取消") {
                         dismiss()
                     }
@@ -276,18 +212,18 @@ struct AddFilterView: View {
         }
     }
     
-    private func saveFilter() {
-        let filter = ContentFilterManager.FilterRule(
+    private func addRule() {
+        let rule = ContentFilterManager.FilterRule(
             id: UUID().uuidString,
-            name: name,
+            name: pattern,
             pattern: pattern,
             replacement: replacement,
             type: type,
             isEnabled: true,
-            category: category.rawValue
+            category: "custom"
         )
         
-        filterManager.addFilter(filter)
+        filterManager.addFilter(rule)
         dismiss()
     }
 }
