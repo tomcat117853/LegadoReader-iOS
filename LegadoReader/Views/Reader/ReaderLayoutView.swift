@@ -5,18 +5,18 @@ struct ReaderLayoutView: View {
     
     @State private var selectedLayout = "自定义"
     @State private var selectedColorIndex = 0
-    @State private var fontSize: Double = 18
+    @State private var brightness: Double = 0.5
     @State private var showLayoutManager = false
     @State private var showColorManager = false
     
     private let layoutTypes = ["自定义", "初号", "小初", "一号", "一号宽", "小一", "二号", "小二", "三号", "小三"]
     
     private let colorSchemes = [
-        ("护眼绿", Color(hex: "E8F5E9")!, Color(hex: "1B5E20")!),
-        ("白色", Color(hex: "FFFFFF")!, Color(hex: "333333")!),
-        ("护眼黄", Color(hex: "F5E6D3")!, Color(hex: "5D4037")!),
-        ("黑色", Color(hex: "1B1B1B")!, Color(hex: "B0B0B0")!),
-        ("深灰", Color(hex: "2D2D2D")!, Color(hex: "CCCCCC")!),
+        ("护眼绿", Color(hex: "E8F5E9")!),
+        ("白色", Color(hex: "FFFFFF")!),
+        ("护眼黄", Color(hex: "F5E6D3")!),
+        ("黑色", Color(hex: "1B1B1B")!),
+        ("深灰", Color(hex: "2D2D2D")!),
     ]
     
     var body: some View {
@@ -45,98 +45,82 @@ struct ReaderLayoutView: View {
                     .padding(.horizontal)
                 }
                 
-                VStack(spacing: 8) {
-                    Text("配色")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal)
-                    
-                    HStack(spacing: 12) {
-                        ForEach(colorSchemes.indices, id: \.self) { index in
-                            Button(action: {
-                                selectedColorIndex = index
-                            }) {
-                                VStack(spacing: 4) {
-                                    ZStack(alignment: .topTrailing) {
-                                        colorSchemes[index].1
-                                            .frame(width: 56, height: 72)
-                                            .cornerRadius(8)
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 8)
-                                                    .stroke(selectedColorIndex == index ? Color(hex: "1B5E20")! : Color.clear, lineWidth: 2)
-                                            )
-                                        
-                                        Image(systemName: "checkmark")
-                                            .font(.caption)
-                                            .foregroundColor(colorSchemes[index].2)
-                                            .padding(2)
-                                    }
-                                    
-                                    Text(colorSchemes[index].0)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                        }
-                        
+                HStack(spacing: 12) {
+                    ForEach(colorSchemes.indices, id: \.self) { index in
                         Button(action: {
-                            showColorManager = true
+                            selectedColorIndex = index
                         }) {
-                            VStack(spacing: 4) {
-                                ZStack {
-                                    Color(.systemGray5)
-                                        .frame(width: 56, height: 72)
-                                        .cornerRadius(8)
-                                    
-                                    Image(systemName: "plus")
-                                        .foregroundColor(.secondary)
-                                }
+                            ZStack(alignment: .topTrailing) {
+                                colorSchemes[index].1
+                                    .frame(width: 56, height: 72)
+                                    .cornerRadius(8)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(selectedColorIndex == index ? Color(hex: "1B5E20")! : Color.clear, lineWidth: 2)
+                                    )
                                 
-                                Text("更多")
+                                Image(systemName: "checkmark")
                                     .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(selectedColorIndex == index ? Color(hex: "1B5E20")! : .white.opacity(0.7))
+                                    .padding(2)
                             }
                         }
                     }
-                    .padding(.horizontal)
                 }
+                .padding(.horizontal)
                 
-                Button(action: {}) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "eye.fill")
-                            .foregroundColor(.white)
+                HStack(spacing: 8) {
+                    HStack(spacing: 0) {
+                        Button(action: {}) {
+                            Text("护眼")
+                                .font(.subheadline)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 24)
+                                .padding(.vertical, 12)
+                                .background(Color(hex: "1B5E20")!)
+                                .cornerRadius(20, corners: [.topLeft, .bottomLeft])
+                        }
                         
-                        Text("护眼")
-                            .font(.subheadline)
-                            .foregroundColor(.white)
+                        Button(action: {}) {
+                            Text("修改")
+                                .font(.subheadline)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 24)
+                                .padding(.vertical, 12)
+                                .background(Color(hex: "1B5E20")!)
+                                .cornerRadius(20, corners: [.topRight, .bottomRight])
+                        }
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
-                    .background(Color(hex: "1B5E20")!)
-                    .cornerRadius(20)
-                }
-                
-                Button(action: {}) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "pencil")
-                            .foregroundColor(.white)
+                    
+                    HStack(spacing: 0) {
+                        Button(action: { showColorManager = true }) {
+                            Text("配色")
+                                .font(.subheadline)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 24)
+                                .padding(.vertical, 12)
+                                .background(Color(hex: "1B5E20")!)
+                                .cornerRadius(20, corners: [.topLeft, .bottomLeft])
+                        }
                         
-                        Text("修改")
-                            .font(.subheadline)
-                            .foregroundColor(.white)
+                        Button(action: { showLayoutManager = true }) {
+                            Text("管理")
+                                .font(.subheadline)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 24)
+                                .padding(.vertical, 12)
+                                .background(Color(hex: "1B5E20")!)
+                                .cornerRadius(20, corners: [.topRight, .bottomRight])
+                        }
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
-                    .background(Color(hex: "1B5E20")!)
-                    .cornerRadius(20)
                 }
+                .padding(.horizontal)
                 
                 HStack {
                     Image(systemName: "sun.max")
                         .foregroundColor(.white)
                     
-                    Slider(value: $fontSize, in: 12...32)
+                    Slider(value: $brightness, in: 0...1)
                         .accentColor(Color(hex: "1B5E20")!)
                     
                     Image(systemName: "sun.max.fill")
@@ -436,6 +420,22 @@ struct ColorSchemeManagerView: View {
                 }
             }
         }
+    }
+}
+
+extension View {
+    func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
+        clipShape(RoundedCorner(radius: radius, corners: corners))
+    }
+}
+
+struct RoundedCorner: Shape {
+    var radius: CGFloat = .infinity
+    var corners: UIRectCorner = .allCorners
+    
+    func path(in rect: CGRect) -> Path {
+        let path = UIBezierPath(roundedRect: rect, byRoundingCorners: corners, cornerRadii: CGSize(width: radius, height: radius))
+        return Path(path.cgPath)
     }
 }
 
