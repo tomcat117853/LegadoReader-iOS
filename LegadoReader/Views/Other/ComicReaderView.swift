@@ -28,6 +28,10 @@ struct ComicReaderView: View {
                 comicContentView
             }
             
+            TwoFingerBrightnessController(isActive: .constant(true)) { _ in }
+            
+            BrightnessIndicatorOverlay()
+            
             if showingPageSlider || settings.showPageSlider {
                 pageSliderOverlay
             }

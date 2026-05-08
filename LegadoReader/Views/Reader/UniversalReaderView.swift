@@ -37,6 +37,7 @@ struct UniversalReaderView: View {
     @State private var showingAnnotationEdit = false
     @State private var showingAnnotationPopup = false
     @State private var selectedAnnotation: AnnotationService.Annotation?
+    @State private var isBrightnessAdjusting = false
     
     private var isLazyBookMode: Bool {
         if case .lazyBook = readerMode { return true }
@@ -105,6 +106,11 @@ struct UniversalReaderView: View {
                         }
                     }
             }
+            
+            TwoFingerBrightnessController(isActive: .constant(true)) { newBrightness in
+            }
+            
+            BrightnessIndicatorOverlay()
             
             if showingMenu {
                 VStack {

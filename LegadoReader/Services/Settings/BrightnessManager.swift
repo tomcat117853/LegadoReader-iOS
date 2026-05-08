@@ -269,6 +269,14 @@ struct BrightnessSettingsView: View {
                 }
                 
                 HStack {
+                    Text("双指滑动手势")
+                    Spacer()
+                    Text("任意位置双指上下滑动")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                HStack {
                     Text("快捷夜间模式")
                     Spacer()
                     Text("三指双击")
