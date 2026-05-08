@@ -10,15 +10,9 @@ class UnifiedThemeManager: BaseService, ObservableObject {
     @Published var isChangingTheme: Bool = false
     @Published var currentLanguage: Language = .simplifiedChinese
     
-    @Published var isEyeCareEnabled: Bool = false
-    @Published var blueLightFilterLevel: Double = 0.0
-    @Published var warmLightLevel: Double = 0.0
-    @Published var contrastLevel: Double = 1.0
-    
     private let themeKey = "UnifiedThemeManager_currentTheme"
     private let languageKey = "UnifiedThemeManager_language"
     private let customThemesKey = "UnifiedThemeManager_customThemes"
-    private let eyeCareKey = "UnifiedThemeManager_eyeCare"
     
     struct UnifiedTheme: Identifiable, Codable, Equatable {
         let id: String
@@ -243,13 +237,6 @@ class UnifiedThemeManager: BaseService, ObservableObject {
            let language = Language(rawValue: savedLanguage) {
             currentLanguage = language
         }
-        
-        if let eyeCareSettings = loadCodable(EyeCareSettings.self, key: eyeCareKey) {
-            isEyeCareEnabled = eyeCareSettings.isEnabled
-            blueLightFilterLevel = eyeCareSettings.blueLightLevel
-            warmLightLevel = eyeCareSettings.warmLightLevel
-            contrastLevel = eyeCareSettings.contrastLevel
-        }
     }
     
     func applyTheme(_ theme: UnifiedTheme) {
@@ -328,95 +315,19 @@ class UnifiedThemeManager: BaseService, ObservableObject {
             applyTheme(builtInThemes.first!)
         }
     }
-    
-    struct EyeCareSettings: Codable {
-        var isEnabled: Bool
-        var blueLightLevel: Double
-        var warmLightLevel: Double
-        var contrastLevel: Double
-    }
-    
-    func enableEyeCare() {
-        isEyeCareEnabled = true
-        saveEyeCareSettings()
-    }
-    
-    func disableEyeCare() {
-        isEyeCareEnabled = false
-        saveEyeCareSettings()
-    }
-    
-    func toggleEyeCare() {
-        isEyeCareEnabled.toggle()
-        saveEyeCareSettings()
-    }
-    
-    func setBlueLightFilter(_ level: Double) {
-        blueLightFilterLevel = max(0, min(1, level))
-        saveEyeCareSettings()
-    }
-    
-    func setWarmLight(_ level: Double) {
-        warmLightLevel = max(0, min(1, level))
-        saveEyeCareSettings()
-    }
-    
-    func setContrast(_ level: Double) {
-        contrastLevel = max(0.8, min(1.5, level))
-        saveEyeCareSettings()
-    }
-    
-    private func saveEyeCareSettings() {
-        let settings = EyeCareSettings(
-            isEnabled: isEyeCareEnabled,
-            blueLightLevel: blueLightFilterLevel,
-            warmLightLevel: warmLightLevel,
-            contrastLevel: contrastLevel
-        )
-        saveCodable(settings, key: eyeCareKey)
-    }
-    
-    var effectiveBackgroundColor: Color {
-        if !isEyeCareEnabled {
-            return Color(hex: currentTheme.backgroundColor) ?? .white
-        }
-        let warmEffect = warmLightLevel * 0.3
-        let blueReduction = blueLightFilterLevel * 0.2
-        return Color(
-            red: 1.0 - blueReduction * 0.3,
-            green: 1.0 - blueReduction * 0.1,
-            blue: warmEffect * 0.7
-        )
-    }
-    
-    var effectiveTextColor: Color {
-        if !isEyeCareEnabled {
-            return Color(hex: currentTheme.textColor) ?? .black
-        }
-        let warmEffect = warmLightLevel * 0.4
-        return Color(
-            red: 0.15 + warmEffect * 0.2,
-            green: 0.12 + warmEffect * 0.15,
-            blue: 0.1 + warmEffect * 0.05
-        )
-    }
-    
-    var effectivePrimaryColor: Color {
-        return Color(hex: currentTheme.primaryColor) ?? .blue
-    }
 }
 
 extension UnifiedThemeManager {
     var primaryColor: Color {
-        effectivePrimaryColor
+        Color(hex: currentTheme.primaryColor) ?? .blue
     }
     
     var backgroundColor: Color {
-        effectiveBackgroundColor
+        Color(hex: currentTheme.backgroundColor) ?? .white
     }
     
     var textColor: Color {
-        effectiveTextColor
+        Color(hex: currentTheme.textColor) ?? .black
     }
     
     var accentColor: Color {
@@ -429,5 +340,17 @@ extension UnifiedThemeManager {
     
     var surfaceColor: Color {
         Color(hex: currentTheme.surfaceColor) ?? .gray.opacity(0.1)
+    }
+    
+    var effectivePrimaryColor: Color {
+        primaryColor
+    }
+    
+    var effectiveBackgroundColor: Color {
+        backgroundColor
+    }
+    
+    var effectiveTextColor: Color {
+        textColor
     }
 }
