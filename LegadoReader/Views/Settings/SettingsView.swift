@@ -19,6 +19,22 @@ struct SettingsView: View {
                         Label("主题设置", systemImage: "palette")
                     }
                     
+                    NavigationLink(destination: TitleSegmentationSettingsView()) {
+                        HStack {
+                            Image(systemName: "text.badge.checkmark")
+                                .foregroundColor(.blue)
+                            Text("标题分段设置")
+                        }
+                    }
+                    
+                    NavigationLink(destination: AnnotationStyleSettingsView()) {
+                        HStack {
+                            Image(systemName: "highlighter")
+                                .foregroundColor(.orange)
+                            Text("标记外观设置")
+                        }
+                    }
+                    
                     Toggle("夜间模式跟随系统", isOn: .constant(false))
                     
                     Toggle("自动翻页", isOn: $readerSettings.isAutoReading)
@@ -143,6 +159,14 @@ struct SettingsView: View {
                             Image(systemName: "book.pages")
                                 .foregroundColor(.green)
                             Text("翻页设置")
+                        }
+                    }
+                    
+                    NavigationLink(destination: TXTImportSettingsView()) {
+                        HStack {
+                            Image(systemName: "doc.text")
+                                .foregroundColor(.blue)
+                            Text("TXT导入设置")
                         }
                     }
                 }
