@@ -44,6 +44,19 @@ struct SettingsView: View {
                         }
                     }
                     
+                    NavigationLink(destination: FontMappingSettingsView()) {
+                        HStack {
+                            Image(systemName: "textformat")
+                                .foregroundColor(.green)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("字体映射")
+                                Text("自定义字符范围的显示字体")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    
                     NavigationLink(destination: ComicReadingSettingsView()) {
                         HStack {
                             Image(systemName: "books.vertical.fill")
