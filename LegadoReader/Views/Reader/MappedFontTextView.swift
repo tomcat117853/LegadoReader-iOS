@@ -102,15 +102,6 @@ struct MappedFontText: View {
     }
 }
 
-extension Color {
-    var uiColor: UIColor {
-        if let cgColor = self.cgColor {
-            return UIColor(cgColor: cgColor)
-        }
-        return .black
-    }
-}
-
 extension TextAlignment {
     var nsTextAlignment: NSTextAlignment {
         switch self {
