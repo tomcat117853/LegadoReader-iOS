@@ -15,6 +15,8 @@ struct LibraryView: View {
     @State private var showingLockedGroup: BookGroup?
     @State private var showingSearch = false
     @State private var showingSourceImport = false
+    @State private var showingSourceEditor = false
+    @State private var editingSource: BookSource?
     @State private var searchText = ""
     @State private var importText = ""
     
@@ -100,15 +102,30 @@ struct LibraryView: View {
         .sheet(item: $selectedBook) { book in
             EnhancedBookDetailView(book: book)
         }
+        .sheet(isPresented: $showingSourceEditor) {
+            SourceEditorView(source: editingSource)
+        }
+        .sheet(isPresented: $showingSourceImport) {
+            sourceImportSheet
+        }
     }
     
     private var sourceManagementContent: some View {
         List {
             ForEach(sourceStore.bookSources) { source in
                 sourceRow(source)
+                    .swipeActions(edge: .leading) {
+                        Button {
+                            editingSource = source
+                            showingSourceEditor = true
+                        } label: {
+                            Label("编辑", systemImage: "pencil")
+                        }
+                        .tint(.blue)
+                    }
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
-                            // 删除书源
+                            sourceStore.removeSource(source)
                         } label: {
                             Label("删除", systemImage: "trash")
                         }
@@ -132,14 +149,27 @@ struct LibraryView: View {
                     Text("暂无书源")
                         .font(.headline)
                         .foregroundColor(.gray)
-                    Button("导入书源") {
-                        showingSourceImport = true
+                    Button("新建书源") {
+                        editingSource = nil
+                        showingSourceEditor = true
                     }
                     .buttonStyle(.borderedProminent)
                 }
             }
         }
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Menu {
+                    Button(action: { editingSource = nil; showingSourceEditor = true }) {
+                        Label("新建书源", systemImage: "plus")
+                    }
+                    Button(action: { showingSourceImport = true }) {
+                        Label("导入书源", systemImage: "square.and.arrow.down")
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                }
+            }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Text("\(sourceStore.bookSources.count) 个书源")
                     .font(.system(size: 14))
