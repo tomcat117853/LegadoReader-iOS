@@ -93,6 +93,14 @@ struct ReplaceRule: Codable, Equatable {
     var pattern: String
     var replacement: String
     var isRegex: Bool
+    var isEnabled: Bool = true
+    
+    init(pattern: String, replacement: String, isRegex: Bool, isEnabled: Bool = true) {
+        self.pattern = pattern
+        self.replacement = replacement
+        self.isRegex = isRegex
+        self.isEnabled = isEnabled
+    }
 }
 
 struct DiscoverRule: Codable, Equatable {

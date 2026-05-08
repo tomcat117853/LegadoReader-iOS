@@ -11,6 +11,8 @@ struct SidebarMenuView: View {
     @State private var showingSettings = false
     @State private var showingBookSource = false
     @State private var showingBookSea = false
+    @State private var showingContentFilter = false
+    @State private var showingCleanRule = false
     
     private let menuItems = [
         SidebarMenuItem(id: "my", icon: "person", title: "我的"),
@@ -22,6 +24,7 @@ struct SidebarMenuView: View {
         SidebarMenuItem(id: "colorManager", icon: "palette", title: "颜色管理"),
         SidebarMenuItem(id: "bookSource", icon: "network", title: "书源管理"),
         SidebarMenuItem(id: "bookSea", icon: "book.horizontal", title: "书海无涯"),
+        SidebarMenuItem(id: "cleanRule", icon: "wand.and.stars", title: "替换规则"),
         SidebarMenuItem(id: "contentFilter", icon: "filter", title: "内容过滤"),
         SidebarMenuItem(id: "settings", icon: "gear", title: "设置"),
     ]
@@ -78,6 +81,12 @@ struct SidebarMenuView: View {
         .sheet(isPresented: $showingBookSea) {
             BookSeaView()
         }
+        .sheet(isPresented: $showingContentFilter) {
+            ContentFilterSettingsView()
+        }
+        .sheet(isPresented: $showingCleanRule) {
+            CleanRuleSettingsView()
+        }
     }
     
     private func handleMenuItemAction(_ id: String) {
@@ -93,7 +102,8 @@ struct SidebarMenuView: View {
             case "settings": showingSettings = true
             case "bookSource": showingBookSource = true
             case "bookSea": showingBookSea = true
-            case "contentFilter": print("内容过滤")
+            case "contentFilter": showingContentFilter = true
+            case "cleanRule": showingCleanRule = true
             case "my": print("我的")
             case "incentive": print("激励视频")
             default: break
