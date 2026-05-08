@@ -66,6 +66,7 @@ struct ReaderBottomBar: View {
     let onAudioBook: () -> Void
     let onAutoScroll: () -> Void
     let onShowChapters: () -> Void
+    let onLayout: () -> Void
     let onCache: () -> Void
     let onPageTurn: () -> Void
     let onSettings: () -> Void
@@ -111,6 +112,20 @@ struct ReaderBottomBar: View {
                             .foregroundColor(.white)
                         
                         Text("目录")
+                            .font(.caption)
+                            .foregroundColor(.white)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                }
+                
+                Button(action: onLayout) {
+                    VStack(spacing: 4) {
+                        Image(systemName: "equal")
+                            .font(.title)
+                            .foregroundColor(.white)
+                        
+                        Text("布局")
                             .font(.caption)
                             .foregroundColor(.white)
                     }

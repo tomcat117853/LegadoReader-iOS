@@ -42,6 +42,7 @@ struct UniversalReaderView: View {
     @State private var isBrightnessAdjusting = false
     @State private var showingSourceSelector = false
     @State private var showingSettingsMenu = false
+    @State private var showingLayoutView = false
     
     private var isLazyBookMode: Bool {
         if case .lazyBook = readerMode { return true }
@@ -140,6 +141,7 @@ struct UniversalReaderView: View {
                             onAudioBook: { showingAudioBook = true },
                             onAutoScroll: { showingAutoScroll = true },
                             onShowChapters: { showingChapterList = true },
+                            onLayout: { showingLayoutView = true },
                             onCache: {},
                             onPageTurn: {},
                             onSettings: { showingSettings = true },
@@ -156,6 +158,7 @@ struct UniversalReaderView: View {
                             onAudioBook: { showingAudioBook = true },
                             onAutoScroll: { showingAutoScroll = true },
                             onShowChapters: { showingChapterList = true },
+                            onLayout: { showingLayoutView = true },
                             onCache: {},
                             onPageTurn: {},
                             onSettings: { showingSettings = true },
@@ -184,6 +187,9 @@ struct UniversalReaderView: View {
         }
         .sheet(isPresented: $showingSourceSelector) {
             BookSourceSelectorView(bookName: currentBookTitle)
+        }
+        .sheet(isPresented: $showingLayoutView) {
+            ReaderLayoutView()
         }
         .sheet(isPresented: $showingStatistics) {
             if let lazyBook = readerMode.lazyBook {
