@@ -7,6 +7,7 @@ struct BookshelfView: View {
     @State private var scrollOffset: CGFloat = 0
     @State private var showingBrowser = false
     @State private var showingSidebar = false
+    @State private var showingBookSourceSearch = false
     
     private let searchThreshold: CGFloat = 60
     
@@ -64,6 +65,11 @@ struct BookshelfView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 16) {
+                        Button(action: { showingBookSourceSearch = true }) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.title)
+                        }
+                        
                         Button(action: { showingBrowser = true }) {
                             Image(systemName: "globe")
                                 .font(.title)
@@ -78,6 +84,9 @@ struct BookshelfView: View {
             }
             .sheet(isPresented: $showingBrowser) {
                 WebBrowserView()
+            }
+            .sheet(isPresented: $showingBookSourceSearch) {
+                BookSourceSearchView()
             }
         }
     }
