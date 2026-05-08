@@ -15,16 +15,12 @@ struct SettingsView: View {
                         Label("阅读界面设置", systemImage: "textformat.size")
                     }
                     
-                    NavigationLink(destination: ThemeSettingsView()) {
-                        Label("主题设置", systemImage: "palette")
-                    }
-                    
                     NavigationLink(destination: ThemeSkinSettingsView()) {
                         HStack {
-                            Image(systemName: "wand.and.stars")
+                            Image(systemName: "palette")
                                 .foregroundColor(.purple)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("一键换肤")
+                                Text("主题设置")
                                 Text("切换全局主题外观")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
