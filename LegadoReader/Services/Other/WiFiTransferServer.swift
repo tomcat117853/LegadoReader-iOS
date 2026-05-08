@@ -11,12 +11,17 @@ class WiFiTransferServer: NSObject, ObservableObject {
     @Published var connectedDevices: [ConnectedDevice] = []
     @Published var transferHistory: [TransferRecord] = []
     @Published var currentTransfer: TransferInfo?
+    @Published var isPasswordEnabled: Bool = false
     
     private var listener: NWListener?
     private var connections: [NWConnection] = []
     private let fileManager = FileManager.default
     private let documentsDirectory: URL
     private let downloadDirectory: URL
+    private var serverPassword: String = ""
+    private var authenticatedConnections: Set<NWConnection> = []
+    
+    private let passwordKey = "WiFiTransfer_password"
     
     struct ConnectedDevice: Identifiable {
         let id: String
@@ -65,6 +70,44 @@ class WiFiTransferServer: NSObject, ObservableObject {
         if let data = try? JSONEncoder().encode(transferHistory) {
             UserDefaults.standard.set(data, forKey: "WiFiTransfer_history")
         }
+    }
+    
+    func loadPassword() {
+        if let password = UserDefaults.standard.string(forKey: passwordKey) {
+            serverPassword = password
+            isPasswordEnabled = !password.isEmpty
+        }
+    }
+    
+    func setPassword(_ password: String) {
+        serverPassword = password
+        UserDefaults.standard.set(password, forKey: passwordKey)
+        isPasswordEnabled = !password.isEmpty
+    }
+    
+    func clearPassword() {
+        serverPassword = ""
+        UserDefaults.standard.removeObject(forKey: passwordKey)
+        isPasswordEnabled = false
+    }
+    
+    func isAuthenticated(_ connection: NWConnection) -> Bool {
+        if !isPasswordEnabled {
+            return true
+        }
+        return authenticatedConnections.contains(connection)
+    }
+    
+    func authenticate(_ connection: NWConnection, password: String) -> Bool {
+        if password == serverPassword {
+            authenticatedConnections.insert(connection)
+            return true
+        }
+        return false
+    }
+    
+    func removeAuthenticatedConnection(_ connection: NWConnection) {
+        authenticatedConnections.remove(connection)
     }
     
     func startServer() {
