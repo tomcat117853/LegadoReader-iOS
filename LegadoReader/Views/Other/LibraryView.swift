@@ -10,6 +10,7 @@ struct LibraryView: View {
     @State private var showingImport = false
     @State private var showingGroupManager = false
     @State private var showingNewGroupSheet = false
+    @State private var showingGroupSettings = false
     @State private var selectedBook: Book?
     @State private var showingGroupDetail: BookGroup?
     @State private var showingLockedGroup: BookGroup?
@@ -60,6 +61,10 @@ struct LibraryView: View {
                     Image(systemName: "folder.badge.gearshape")
                 }
                 
+                Button(action: { showingGroupSettings = true }) {
+                    Image(systemName: "slider.horizontal.3")
+                }
+                
                 Button(action: { showingNewGroupSheet = true }) {
                     Image(systemName: "folder.badge.plus")
                 }
@@ -84,6 +89,9 @@ struct LibraryView: View {
         }
         .sheet(isPresented: $showingGroupManager) {
             GroupManagementView()
+        }
+        .sheet(isPresented: $showingGroupSettings) {
+            GroupSettingsView()
         }
         .sheet(isPresented: $showingNewGroupSheet) {
             NewGroupSheet()

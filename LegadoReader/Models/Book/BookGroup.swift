@@ -15,6 +15,33 @@ struct BookGroup: Identifiable, Codable, Equatable {
     var password: String?
     var passwordHint: String?
     
+    enum LayoutStyle: String, Codable, CaseIterable {
+        case grid = "grid"
+        case list = "list"
+        case cover = "cover"
+        
+        var displayName: String {
+            switch self {
+            case .grid: return "网格布局"
+            case .list: return "列表布局"
+            case .cover: return "封面布局"
+            }
+        }
+        
+        var icon: String {
+            switch self {
+            case .grid: return "square.grid.2x2"
+            case .list: return "list.bullet"
+            case .cover: return "photo.stack"
+            }
+        }
+    }
+    
+    var layoutStyle: LayoutStyle = .grid
+    var sortOption: String = "namePinyin"
+    var sortAscending: Bool = true
+    var columnsCount: Int = 3
+    
     init(id: String = UUID().uuidString,
          name: String,
          icon: String = "folder.fill",
@@ -32,6 +59,10 @@ struct BookGroup: Identifiable, Codable, Equatable {
         self.description = nil
         self.password = nil
         self.passwordHint = nil
+        self.layoutStyle = .grid
+        self.sortOption = "namePinyin"
+        self.sortAscending = true
+        self.columnsCount = 3
     }
     
     var bookCount: Int {
@@ -45,6 +76,28 @@ struct BookGroup: Identifiable, Codable, Equatable {
     var hasPassword: Bool {
         return password != nil && !(password?.isEmpty ?? true)
     }
+    
+    func getSortIcon() -> String {
+        switch sortOption {
+        case "namePinyin": return "textformat.abc"
+        case "authorPinyin": return "person"
+        case "lastRead": return "clock"
+        case "addedTime": return "calendar"
+        case "name": return "textformat"
+        default: return "arrow.up.arrow.down"
+        }
+    }
+    
+    func getSortName() -> String {
+        switch sortOption {
+        case "namePinyin": return "按书名拼音"
+        case "authorPinyin": return "按作者拼音"
+        case "lastRead": return "最近阅读"
+        case "addedTime": return "添加时间"
+        case "name": return "书名排序"
+        default: return sortOption
+        }
+    }
 }
 
 struct GroupEditInfo: Codable {
@@ -56,6 +109,10 @@ struct GroupEditInfo: Codable {
     var coverImage: String?
     var password: String?
     var passwordHint: String?
+    var layoutStyle: BookGroup.LayoutStyle
+    var sortOption: String
+    var sortAscending: Bool
+    var columnsCount: Int
     
     init(from group: BookGroup) {
         self.name = group.name
@@ -66,6 +123,10 @@ struct GroupEditInfo: Codable {
         self.coverImage = group.coverImage
         self.password = group.password
         self.passwordHint = group.passwordHint
+        self.layoutStyle = group.layoutStyle
+        self.sortOption = group.sortOption
+        self.sortAscending = group.sortAscending
+        self.columnsCount = group.columnsCount
     }
     
     func apply(to group: inout BookGroup) {
@@ -77,6 +138,10 @@ struct GroupEditInfo: Codable {
         group.coverImage = coverImage
         group.password = password
         group.passwordHint = passwordHint
+        group.layoutStyle = layoutStyle
+        group.sortOption = sortOption
+        group.sortAscending = sortAscending
+        group.columnsCount = columnsCount
         group.updatedTime = Date()
     }
 }
