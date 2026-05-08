@@ -349,9 +349,21 @@ struct LazyBookReaderView: View {
     @State private var showingChapterList: Bool = false
     @State private var showingSettings: Bool = false
     @State private var showingStatistics: Bool = false
+    @State private var showingAudioBook: Bool = false
+    @State private var showingAutoScroll: Bool = false
+    @State private var autoScrollManager = AutoScrollManager()
     
     @StateObject private var readerSettings = ReaderSettings.shared
     @StateObject private var eyeCareManager = EyeCareManager.shared
+    @StateObject private var annotationService = AnnotationService.shared
+    @StateObject private var styleManager = AnnotationStyleManager.shared
+    
+    @State private var showingAnnotationMenu = false
+    @State private var selectedText = ""
+    @State private var selectedRange = NSRange(location: 0, length: 0)
+    @State private var showingAnnotationEdit = false
+    @State private var showingAnnotationPopup = false
+    @State private var selectedAnnotation: AnnotationService.Annotation?
     
     var body: some View {
         ZStack {
@@ -363,6 +375,10 @@ struct LazyBookReaderView: View {
             } else if let chapter = currentChapter {
                 readerContent(chapter)
             }
+            
+            if showingAnnotationMenu {
+                annotationMenuOverlay
+            }
         }
         .task {
             await loadChapter(0)
@@ -372,6 +388,54 @@ struct LazyBookReaderView: View {
         }
         .sheet(isPresented: $showingStatistics) {
             UnifiedBookStatisticsView(bookId: bookId, book: book)
+        }
+        .sheet(isPresented: $showingAudioBook) {
+            AudioBookView()
+        }
+        .sheet(isPresented: $showingAutoScroll) {
+            AutoScrollSettingsView(manager: autoScrollManager)
+        }
+        .sheet(isPresented: $showingAnnotationEdit) {
+            NavigationView {
+                AnnotationEditView(
+                    bookId: bookId,
+                    chapterId: currentChapter?.id ?? "",
+                    chapterIndex: currentChapterIndex,
+                    chapterTitle: currentChapter?.title ?? "",
+                    bookName: book.bookTitle,
+                    selectedText: selectedText,
+                    selectedRange: selectedRange,
+                    existingAnnotation: selectedAnnotation,
+                    onSave: { annotation in
+                        if selectedAnnotation != nil {
+                            annotationService.updateAnnotation(annotation)
+                        } else {
+                            annotationService.addAnnotation(annotation)
+                        }
+                        showingAnnotationEdit = false
+                        selectedAnnotation = nil
+                    }
+                )
+            }
+        }
+    }
+    
+    private var annotationMenuOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.01)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    showingAnnotationMenu = false
+                }
+            
+            AnnotationPopupMenuView(
+                position: CGPoint(x: UIScreen.main.bounds.midX, y: UIScreen.main.bounds.height * 0.4),
+                selectedText: selectedText,
+                onHighlight: addHighlight,
+                onAddNote: { showingAnnotationEdit = true },
+                onCopy: copySelectedText,
+                onShare: shareSelectedText
+            )
         }
     }
     
@@ -394,20 +458,21 @@ struct LazyBookReaderView: View {
             ZStack {
                 VStack(spacing: 0) {
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text(chapter.title)
-                                .font(.system(size: readerSettings.fontSize + 4, weight: .bold))
-                                .foregroundColor(textColor)
-                                .frame(maxWidth: .infinity, alignment: .center)
-                                .padding(.vertical, 16)
-                            
-                            Text(chapter.content)
-                                .font(.custom(readerSettings.fontFamily, size: readerSettings.fontSize))
-                                .foregroundColor(textColor)
-                                .lineSpacing(readerSettings.lineSpacing)
-                                .padding(.horizontal, readerSettings.horizontalPadding)
-                                .textSelection(.enabled)
-                        }
+                        LazySelectableTextView(
+                            chapterTitle: chapter.title,
+                            content: chapter.content,
+                            fontSize: readerSettings.fontSize,
+                            fontFamily: readerSettings.fontFamily,
+                            lineSpacing: readerSettings.lineSpacing,
+                            horizontalPadding: readerSettings.horizontalPadding,
+                            textColor: textColor,
+                            annotations: getCurrentAnnotations(),
+                            onTextSelected: { text, range in
+                                selectedText = text
+                                selectedRange = range
+                                showingAnnotationMenu = true
+                            }
+                        )
                     }
                     
                     chapterNavigation
@@ -437,6 +502,24 @@ struct LazyBookReaderView: View {
             
             Button(action: { showingChapterList = true }) {
                 Image(systemName: "list.bullet")
+                    .font(.system(size: 20))
+                    .foregroundColor(.white)
+                    .frame(width: 44, height: 44)
+                    .background(Color.black.opacity(0.5))
+                    .clipShape(Circle())
+            }
+            
+            Button(action: { showingAudioBook = true }) {
+                Image(systemName: "headphones")
+                    .font(.system(size: 20))
+                    .foregroundColor(.white)
+                    .frame(width: 44, height: 44)
+                    .background(Color.black.opacity(0.5))
+                    .clipShape(Circle())
+            }
+            
+            Button(action: { showingAutoScroll = true }) {
+                Image(systemName: "arrow.down.right.and.arrow.up.left")
                     .font(.system(size: 20))
                     .foregroundColor(.white)
                     .frame(width: 44, height: 44)
@@ -507,6 +590,48 @@ struct LazyBookReaderView: View {
                 self.isLoading = false
             }
         }
+    }
+    
+    private func getCurrentAnnotations() -> [AnnotationService.Annotation] {
+        return annotationService.getAnnotations(for: bookId, chapterIndex: currentChapterIndex)
+    }
+    
+    private func addHighlight() {
+        guard !selectedText.isEmpty else { return }
+        
+        let annotation = AnnotationService.Annotation(
+            bookId: bookId,
+            chapterId: currentChapter?.id ?? "",
+            chapterIndex: currentChapterIndex,
+            chapterTitle: currentChapter?.title ?? "",
+            bookName: book.bookTitle,
+            startOffset: selectedRange.location,
+            endOffset: selectedRange.location + selectedRange.length,
+            text: selectedText,
+            style: styleManager.currentStyle,
+            colorHex: styleManager.currentColor.hex
+        )
+        
+        annotationService.addAnnotation(annotation)
+        showingAnnotationMenu = false
+    }
+    
+    private func copySelectedText() {
+        UIPasteboard.general.string = selectedText
+        showingAnnotationMenu = false
+    }
+    
+    private func shareSelectedText() {
+        let activityVC = UIActivityViewController(
+            activityItems: [selectedText],
+            applicationActivities: nil
+        )
+        
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let rootVC = windowScene.windows.first?.rootViewController {
+            rootVC.present(activityVC, animated: true)
+        }
+        showingAnnotationMenu = false
     }
 }
 
