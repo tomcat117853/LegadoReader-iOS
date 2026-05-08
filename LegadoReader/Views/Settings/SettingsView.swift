@@ -70,6 +70,19 @@ struct SettingsView: View {
                         }
                     }
                     
+                    NavigationLink(destination: CustomAudioSourceSettingsView()) {
+                        HStack {
+                            Image(systemName: "waveform")
+                                .foregroundColor(.purple)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("听书源设置")
+                                Text("自定义在线TTS语音源")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    
                     Toggle("夜间模式跟随系统", isOn: .constant(false))
                     
                     Toggle("自动翻页", isOn: $readerSettings.isAutoReading)
