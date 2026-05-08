@@ -60,6 +60,42 @@ class ArchiveManager: BaseService {
         loadRecentArchives()
     }
     
+    private func isPathTraversal(_ path: String, baseURL: URL) -> Bool {
+        let normalizedPath = path
+            .replacingOccurrences(of: "\\", with: "/")
+        
+        if normalizedPath.contains("..") {
+            return true
+        }
+        
+        if normalizedPath.hasPrefix("/") || normalizedPath.hasPrefix("./") {
+            return true
+        }
+        
+        return false
+    }
+    
+    private func sanitizeFileName(_ fileName: String) -> String {
+        let invalidChars = CharacterSet(charactersIn: "/\\:*?\"<>|")
+        return fileName.components(separatedBy: invalidChars).joined(separator: "_")
+    }
+    
+    private func safeExtractPath(_ path: String, to destination: URL) -> URL {
+        let sanitizedName = sanitizeFileName(path)
+            .replacingOccurrences(of: "..", with: "_")
+        
+        let safePath = destination.appendingPathComponent(sanitizedName)
+        
+        let resolvedSafe = safePath.resolvingSymlinksInPath()
+        let resolvedDest = destination.resolvingSymlinksInPath()
+        
+        if !resolvedSafe.path.hasPrefix(resolvedDest.path) {
+            return destination.appendingPathComponent(UUID().uuidString + "_" + sanitizedName)
+        }
+        
+        return safePath
+    }
+    
     private func registerFormats() {
         supportedArchiveFormats = [
             ArchiveFormat(id: "zip", name: "ZIP", extensions: ["zip", "cbz"], isNativeSupported: true),
@@ -145,6 +181,8 @@ class ArchiveManager: BaseService {
         var extractedFiles: [URL] = []
         
         do {
+            try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+            
             if filename.hasSuffix(".zip") || filename.hasSuffix(".cbz") {
                 extractedFiles = try await extractZIPArchive(at: url, to: destination, entries: entries)
             } else if filename.hasSuffix(".rar") || filename.hasSuffix(".cbr") {
@@ -710,14 +748,20 @@ class ArchiveManager: BaseService {
                 }
                 
                 if let content = decompressedData {
-                    let filePath = destination.appendingPathComponent(name)
+                    if self.isPathTraversal(name, baseURL: destination) {
+                        self.logWarning("Blocked path traversal attempt: \(name)")
+                        offset = dataEnd
+                        continue
+                    }
+                    
+                    let filePath = self.safeExtractPath(name, to: destination)
                     
                     do {
                         try FileManager.default.createDirectory(at: filePath.deletingLastPathComponent(), withIntermediateDirectories: true)
                         try content.write(to: filePath)
                         extractedFiles.append(filePath)
                     } catch {
-                        logWarning("Failed to write file: \(name)")
+                        self.logWarning("Failed to write file: \(name)")
                     }
                 }
                 
@@ -873,14 +917,20 @@ class ArchiveManager: BaseService {
                 
                 let compressedData = data[dataStart..<dataEnd]
                 if let decompressed = self.decompressRARDATA(Data(compressedData)) {
-                    let filePath = destination.appendingPathComponent(name)
+                    if self.isPathTraversal(name, baseURL: destination) {
+                        self.logWarning("Blocked path traversal attempt: \(name)")
+                        offset += blockLength
+                        continue
+                    }
+                    
+                    let filePath = self.safeExtractPath(name, to: destination)
                     
                     do {
                         try FileManager.default.createDirectory(at: filePath.deletingLastPathComponent(), withIntermediateDirectories: true)
                         try decompressed.write(to: filePath)
                         extractedFiles.append(filePath)
                     } catch {
-                        logWarning("Failed to write file: \(name)")
+                        self.logWarning("Failed to write file: \(name)")
                     }
                 }
                 
@@ -1092,14 +1142,22 @@ class ArchiveManager: BaseService {
                 
                 if size > 0 && offset + size <= data.count {
                     let fileData = data[offset..<offset+size]
-                    let filePath = destination.appendingPathComponent(name)
+                    
+                    if self.isPathTraversal(name, baseURL: destination) {
+                        self.logWarning("Blocked path traversal attempt: \(name)")
+                        let padding = (512 - (size % 512)) % 512
+                        offset += size + padding
+                        continue
+                    }
+                    
+                    let filePath = self.safeExtractPath(name, to: destination)
                     
                     do {
                         try FileManager.default.createDirectory(at: filePath.deletingLastPathComponent(), withIntermediateDirectories: true)
                         try Data(fileData).write(to: filePath)
                         extractedFiles.append(filePath)
                     } catch {
-                        logWarning("Failed to write tar file: \(name)")
+                        self.logWarning("Failed to write tar file: \(name)")
                     }
                     
                     let padding = (512 - (size % 512)) % 512
@@ -1133,8 +1191,17 @@ class ArchiveManager: BaseService {
                     }
                     
                     let originalName = url.deletingPathExtension().lastPathComponent
-                    let filePath = destination.appendingPathComponent(originalName)
                     
+                    if self.isPathTraversal(originalName, baseURL: destination) {
+                        self.logWarning("Blocked path traversal attempt: \(originalName)")
+                        let safeName = UUID().uuidString + "_decompressed"
+                        let filePath = destination.appendingPathComponent(safeName)
+                        try decompressed.write(to: filePath)
+                        continuation.resume(returning: [filePath])
+                        return
+                    }
+                    
+                    let filePath = self.safeExtractPath(originalName, to: destination)
                     try decompressed.write(to: filePath)
                     continuation.resume(returning: [filePath])
                 } catch {
