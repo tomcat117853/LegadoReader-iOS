@@ -530,7 +530,19 @@ struct DocumentPickerView: UIViewControllerRepresentable {
     var onPick: (URL) -> Void
     
     func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        let supportedTypes: [UTType] = [.archive, .pdf]
+        var supportedTypes: [UTType] = [.archive, .pdf]
+        if let zipType = UTType("public.zip-archive") {
+            supportedTypes.append(zipType)
+        }
+        if let sevenZType = UTType("org.7-zip.7-zip-archive") {
+            supportedTypes.append(sevenZType)
+        }
+        if let tarType = UTType("public.tar-archive") {
+            supportedTypes.append(tarType)
+        }
+        if let gzipType = UTType("org.gnu.gnu-zip-archive") {
+            supportedTypes.append(gzipType)
+        }
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: supportedTypes)
         picker.delegate = context.coordinator
         picker.allowsMultipleSelection = false
