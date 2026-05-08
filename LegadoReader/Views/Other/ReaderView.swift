@@ -8,6 +8,9 @@ struct ReaderView: View {
     @EnvironmentObject var readerSettings: ReaderSettings
     @Environment(\.dismiss) var dismiss
     
+    @StateObject private var annotationService = AnnotationService.shared
+    @StateObject private var styleManager = AnnotationStyleManager.shared
+    
     @State private var chapters: [Chapter] = []
     @State private var currentChapter: Chapter?
     @State private var chapterContent: String = ""
@@ -19,6 +22,15 @@ struct ReaderView: View {
     @State private var showingAutoScroll = false
     @State private var autoScrollManager = AutoScrollManager()
     
+    @State private var showingAnnotationMenu = false
+    @State private var selectedText = ""
+    @State private var selectedRange = NSRange(location: 0, length: 0)
+    @State private var menuPosition: CGPoint = .zero
+    @State private var showingAnnotationEdit = false
+    @State private var showingAnnotationPopup = false
+    @State private var selectedAnnotation: AnnotationService.Annotation?
+    @State private var annotationPopupPosition: CGPoint = .zero
+    
     var body: some View {
         ZStack {
             readerSettings.currentBackground
@@ -27,26 +39,23 @@ struct ReaderView: View {
             if isLoading {
                 ProgressView("加载中...")
             } else {
-                ReaderContentView(
+                SelectableReaderContentView(
                     content: chapterContent,
                     chapterTitle: currentChapter?.title ?? "",
                     settings: readerSettings,
-                    autoScrollManager: autoScrollManager
+                    annotations: getCurrentAnnotations(),
+                    onTextSelected: { text, range in
+                        selectedText = text
+                        selectedRange = range
+                        showingAnnotationMenu = true
+                    },
+                    onAnnotationTapped: { annotation in
+                        selectedAnnotation = annotation
+                        annotationPopupPosition = CGPoint(x: UIScreen.main.bounds.midX, y: UIScreen.main.bounds.midY)
+                        showingAnnotationPopup = true
+                    }
                 )
-                .onTapGesture(count: 2) {
-                    withAnimation {
-                        if autoScrollManager.isScrolling {
-                            autoScrollManager.stop()
-                        } else {
-                            autoScrollManager.start()
-                        }
-                    }
-                }
-                .onTapGesture {
-                    withAnimation {
-                        showingMenu.toggle()
-                    }
-                }
+                .ignoresSafeArea(edges: .bottom)
             }
             
             if autoScrollManager.isScrolling {
@@ -77,6 +86,39 @@ struct ReaderView: View {
                     .background(readerSettings.currentBackground.opacity(0.95))
                 }
             }
+            
+            if showingAnnotationMenu {
+                Color.black.opacity(0.01)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        showingAnnotationMenu = false
+                    }
+                
+                AnnotationPopupMenuView(
+                    position: CGPoint(x: UIScreen.main.bounds.midX, y: UIScreen.main.bounds.height * 0.4),
+                    selectedText: selectedText,
+                    onHighlight: addHighlight,
+                    onAddNote: { showingAnnotationEdit = true },
+                    onCopy: copySelectedText,
+                    onShare: shareSelectedText
+                )
+            }
+            
+            if showingAnnotationPopup, let annotation = selectedAnnotation {
+                PopupAnnotationView(
+                    annotation: annotation,
+                    position: annotationPopupPosition,
+                    onEdit: { ann in
+                        selectedAnnotation = ann
+                        showingAnnotationEdit = true
+                        showingAnnotationPopup = false
+                    },
+                    onDelete: deleteAnnotation
+                )
+                .onTapGesture {
+                    showingAnnotationPopup = false
+                }
+            }
         }
         .sheet(isPresented: $showingSettings) {
             ReaderSettingsView(settings: readerSettings)
@@ -95,6 +137,29 @@ struct ReaderView: View {
         }
         .sheet(isPresented: $showingAutoScroll) {
             AutoScrollSettingsView(manager: autoScrollManager)
+        }
+        .sheet(isPresented: $showingAnnotationEdit) {
+            NavigationView {
+                AnnotationEditView(
+                    bookId: book.id,
+                    chapterId: currentChapter?.id ?? "",
+                    chapterIndex: currentChapter?.index ?? 0,
+                    chapterTitle: currentChapter?.title ?? "",
+                    bookName: book.name,
+                    selectedText: selectedText,
+                    selectedRange: selectedRange,
+                    existingAnnotation: selectedAnnotation,
+                    onSave: { annotation in
+                        if selectedAnnotation != nil {
+                            annotationService.updateAnnotation(annotation)
+                        } else {
+                            annotationService.addAnnotation(annotation)
+                        }
+                        showingAnnotationEdit = false
+                        selectedAnnotation = nil
+                    }
+                )
+            }
         }
         .onAppear {
             loadInitialData()
@@ -180,6 +245,55 @@ struct ReaderView: View {
         if let chapter = currentChapter {
             bookStore.updateReadingProgress(book: book, chapter: chapter, position: 0)
         }
+    }
+    
+    private func getCurrentAnnotations() -> [AnnotationService.Annotation] {
+        guard let chapter = currentChapter else { return [] }
+        return annotationService.getAnnotations(for: book.id, chapterIndex: chapter.index)
+    }
+    
+    private func addHighlight() {
+        guard !selectedText.isEmpty else { return }
+        
+        let annotation = AnnotationService.Annotation(
+            bookId: book.id,
+            chapterId: currentChapter?.id ?? "",
+            chapterIndex: currentChapter?.index ?? 0,
+            chapterTitle: currentChapter?.title ?? "",
+            bookName: book.name,
+            startOffset: selectedRange.location,
+            endOffset: selectedRange.location + selectedRange.length,
+            text: selectedText,
+            style: styleManager.currentStyle,
+            colorHex: styleManager.currentColor.hex
+        )
+        
+        annotationService.addAnnotation(annotation)
+        showingAnnotationMenu = false
+    }
+    
+    private func copySelectedText() {
+        UIPasteboard.general.string = selectedText
+        showingAnnotationMenu = false
+    }
+    
+    private func shareSelectedText() {
+        let activityVC = UIActivityViewController(
+            activityItems: [selectedText],
+            applicationActivities: nil
+        )
+        
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let rootVC = windowScene.windows.first?.rootViewController {
+            rootVC.present(activityVC, animated: true)
+        }
+        showingAnnotationMenu = false
+    }
+    
+    private func deleteAnnotation(_ annotation: AnnotationService.Annotation) {
+        annotationService.removeAnnotation(annotation)
+        showingAnnotationPopup = false
+        selectedAnnotation = nil
     }
 }
 
