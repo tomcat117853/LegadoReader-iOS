@@ -41,6 +41,7 @@ struct UniversalReaderView: View {
     @State private var selectedAnnotation: AnnotationService.Annotation?
     @State private var isBrightnessAdjusting = false
     @State private var showingSourceSelector = false
+    @State private var showingSettingsMenu = false
     
     private var isLazyBookMode: Bool {
         if case .lazyBook = readerMode { return true }
@@ -170,7 +171,7 @@ struct UniversalReaderView: View {
             }
         }
         .sheet(isPresented: $showingSettings) {
-            ReaderSettingsView(settings: readerSettings)
+            ReaderSettingsMenuView()
         }
         .sheet(isPresented: $showingChapterList) {
             chapterListView
