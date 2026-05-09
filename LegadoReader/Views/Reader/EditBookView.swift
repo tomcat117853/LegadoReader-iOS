@@ -29,17 +29,9 @@ struct EditBookView: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         Section(header: sectionHeader("解析配置")) {
-                            OptionRow(title: "标题中的数字", value: titleNumbering, options: numberingOptions) { newValue in
-                                titleNumbering = newValue
-                            }
-                            
-                            OptionRow(title: "指定编码", value: encoding, options: encodingOptions) { newValue in
-                                encoding = newValue
-                            }
-                            
-                            OptionRow(title: "书籍类型", value: bookType, options: bookTypes) { newValue in
-                                bookType = newValue
-                            }
+                            OptionRow(title: "标题中的数字", value: titleNumbering)
+                            OptionRow(title: "指定编码", value: encoding)
+                            OptionRow(title: "书籍类型", value: bookType)
                             
                             Button(action: {
                                 startParsing()
@@ -86,9 +78,7 @@ struct EditBookView: View {
                         }
                         
                         Section(header: sectionHeader("书籍分组")) {
-                            OptionRow(title: "所属分组", value: selectedGroup, options: groups) { newValue in
-                                selectedGroup = newValue
-                            }
+                            OptionRow(title: "所属分组", value: selectedGroup)
                         }
                         
                         Section(header: sectionHeader("其它")) {
@@ -97,18 +87,16 @@ struct EditBookView: View {
                             }
                         }
                         
-                        if !parsedChapters.isEmpty {
-                            Section(header: sectionHeader("章节预览 (共 \(parsedChapters.count) 章)")) {
-                                ForEach(parsedChapters.prefix(10)) { chapter in
-                                    ChapterPreviewRow(chapter: chapter)
-                                }
-                                
-                                if parsedChapters.count > 10 {
-                                    Text("... 还有 \(parsedChapters.count - 10) 个章节")
-                                        .font(.caption)
-                                        .foregroundColor(.white.opacity(0.7))
-                                        .padding(.vertical, 8)
-                                }
+                        Section(header: sectionHeader("")) {
+                            Text("总章节数:\(totalChapters > 0 ? totalChapters : 1080)")
+                                .font(.caption)
+                                .foregroundColor(.white.opacity(0.7))
+                                .padding(.horizontal, 16)
+                        }
+                        
+                        Section {
+                            ForEach(parsedChapters.prefix(3)) { chapter in
+                                ChapterPreviewRow(chapter: chapter)
                             }
                         }
                     }
@@ -117,15 +105,6 @@ struct EditBookView: View {
                 
                 if showImporting {
                     ImportingOverlay()
-                }
-                
-                if showSuccess {
-                    SuccessOverlay(message: successMessage) {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                            showSuccess = false
-                            dismiss()
-                        }
-                    }
                 }
             }
             .background(Color(hex: "1B5E20")!.opacity(0.95))
@@ -147,6 +126,13 @@ struct EditBookView: View {
                     .disabled(parsedChapters.isEmpty)
                 }
             }
+            .overlay(
+                Group {
+                    if showSuccess {
+                        SuccessBanner(message: successMessage)
+                    }
+                }
+            )
         }
     }
     
@@ -165,9 +151,11 @@ struct EditBookView: View {
                 .fill(Color(hex: "333333")!)
                 .frame(width: 80, height: 100)
             
-            Image(systemName: "book")
-                .foregroundColor(.white.opacity(0.5))
-                .font(.title)
+            Image("book_cover")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 80, height: 100)
+                .cornerRadius(8)
         }
     }
     
@@ -220,16 +208,9 @@ struct EditBookView: View {
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
             parsedChapters = [
-                ParsedChapter(id: "1", title: "扉页", level: 1, status: .success),
-                ParsedChapter(id: "2", title: "制作信息", level: 0, status: .success),
-                ParsedChapter(id: "3", title: "内容简介", level: 0, status: .success),
-                ParsedChapter(id: "4", title: "卷一", level: 1, status: .success),
-                ParsedChapter(id: "5", title: "第一章 洪公子", level: 2, status: .success),
-                ParsedChapter(id: "6", title: "第二章 想再听弹奏", level: 2, status: .success),
-                ParsedChapter(id: "7", title: "第三章 岂能算了", level: 2, status: .success),
-                ParsedChapter(id: "8", title: "第四章 黄大人的烦恼", level: 2, status: .success),
-                ParsedChapter(id: "9", title: "第五章 君影草", level: 2, status: .success),
-                ParsedChapter(id: "10", title: "第六章 另有高见", level: 2, status: .success),
+                ParsedChapter(id: "1", title: "扉页", level: "等级:1", status: .success),
+                ParsedChapter(id: "2", title: "制作信息", level: "等级:0", status: .success),
+                ParsedChapter(id: "3", title: "内容简介", level: "等级:0", status: .success),
             ]
             totalChapters = 1080
             parseProgress = 1.0
@@ -256,8 +237,6 @@ struct EditBookView: View {
 struct OptionRow: View {
     let title: String
     let value: String
-    let options: [String]
-    let onSelect: (String) -> Void
     
     var body: some View {
         Button(action: {}) {
@@ -286,7 +265,7 @@ struct OptionRow: View {
 struct ParsedChapter: Identifiable {
     let id: String
     let title: String
-    let level: Int
+    let level: String
     let status: ParseStatus
     
     enum ParseStatus {
@@ -301,87 +280,62 @@ struct ChapterPreviewRow: View {
     
     var body: some View {
         HStack {
-            Text(String(repeating: "  ", count: chapter.level) + chapter.title)
+            Text(chapter.title)
                 .font(.subheadline)
                 .foregroundColor(.white)
                 .lineLimit(1)
             
             Spacer()
             
-            Image(systemName: chapter.status == .success ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                .foregroundColor(chapter.status == .success ? .green : .orange)
+            Text(chapter.level)
                 .font(.caption)
+                .foregroundColor(.white.opacity(0.7))
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.vertical, 12)
     }
 }
 
 struct ImportingOverlay: View {
-    @State private var progress: Double = 0.0
-    
-    var body: some View {
-        ZStack {
-            Color.black.opacity(0.7)
-                .ignoresSafeArea()
-            
-            VStack(spacing: 20) {
-                Text("导入中...")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                
-                ProgressView(value: progress)
-                    .progressViewStyle(CircularProgressViewStyle(tint: Color(hex: "8BC34A")!))
-                    .scaleEffect(1.5)
-                
-                Text("\(Int(progress * 100))%")
-                    .font(.caption)
-                    .foregroundColor(.white.opacity(0.7))
-                
-                Text("正在返回阅读位置...")
-                    .font(.caption)
-                    .foregroundColor(.white.opacity(0.5))
-            }
-            .padding(40)
-            .background(Color(hex: "333333")!)
-            .cornerRadius(16)
-        }
-        .onAppear {
-            animateProgress()
-        }
-    }
-    
-    private func animateProgress() {
-        withAnimation(.linear(duration: 2.0)) {
-            progress = 1.0
-        }
-    }
-}
-
-struct SuccessOverlay: View {
-    let message: String
-    let onDismiss: () -> Void
-    
     var body: some View {
         ZStack {
             Color.black.opacity(0.5)
                 .ignoresSafeArea()
             
             VStack(spacing: 16) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 60))
-                    .foregroundColor(Color(hex: "8BC34A")!)
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    .scaleEffect(1.5)
                 
-                Text(message)
+                Text("导入中")
                     .font(.headline)
                     .foregroundColor(.white)
-                    .multilineTextAlignment(.center)
             }
-            .padding(40)
+            .padding(30)
             .background(Color(hex: "333333")!)
             .cornerRadius(16)
         }
-        .transition(.opacity.combined(with: .scale))
+        .transition(.opacity)
+    }
+}
+
+struct SuccessBanner: View {
+    let message: String
+    
+    var body: some View {
+        VStack {
+            Spacer()
+            
+            Text(message)
+                .font(.headline)
+                .foregroundColor(Color(hex: "8BC34A")!)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 12)
+                .background(Color(hex: "333333")!)
+                .cornerRadius(20)
+        }
+        .padding(.bottom, 50)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 }
 
