@@ -7,17 +7,20 @@ struct TableOfContentsView: View {
     let chapters: [Chapter]
     let currentChapterIndex: Int
     let onSelectChapter: (Int) -> Void
+    let onRefresh: (() -> Void)?
     
     @State private var expandedSections: Set<String> = []
     @State private var localCurrentIndex: Int
     @State private var showSearch = false
     @State private var searchText = ""
+    @State private var showRefreshAlert = false
     
-    init(bookName: String, chapters: [Chapter], currentChapterIndex: Int, onSelectChapter: @escaping (Int) -> Void) {
+    init(bookName: String, chapters: [Chapter], currentChapterIndex: Int, onSelectChapter: @escaping (Int) -> Void, onRefresh: (() -> Void)? = nil) {
         self.bookName = bookName
         self.chapters = chapters
         self.currentChapterIndex = currentChapterIndex
         self.onSelectChapter = onSelectChapter
+        self.onRefresh = onRefresh
         self._localCurrentIndex = State(initialValue: currentChapterIndex)
     }
     
@@ -62,8 +65,10 @@ struct TableOfContentsView: View {
                 
                 Spacer()
                 
-                Button(action: {}) {
-                    Image(systemName: "list.bullet")
+                Button(action: {
+                    showRefreshAlert = true
+                }) {
+                    Image(systemName: "arrow.clockwise")
                         .foregroundColor(.white)
                 }
                 
@@ -226,6 +231,16 @@ struct TableOfContentsView: View {
         }
         .background(Color(hex: "1B5E20")!.opacity(0.95))
         .presentationDetents([.large])
+        .alert(isPresented: $showRefreshAlert) {
+            Alert(
+                title: Text("提示"),
+                message: Text("重新从原文件中加载所有数据，将覆盖当前所有被修改过的内容"),
+                primaryButton: .destructive(Text("重新解析")) {
+                    onRefresh?()
+                },
+                secondaryButton: .cancel(Text("取消"))
+            )
+        }
     }
     
     private func chapterRow(chapter: Chapter, index: Int, isSectionChapter: Bool) -> some View {
