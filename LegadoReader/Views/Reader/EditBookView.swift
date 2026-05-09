@@ -3,13 +3,14 @@ import SwiftUI
 struct EditBookView: View {
     @Environment(\.dismiss) var dismiss
     
-    @State private var bookName = "大明春色"
-    @State private var author = "西风紧"
-    @State private var summary = ""
-    @State private var selectedGroup = "顶层书架"
-    @State private var titleNumbering = "与原文一致"
-    @State private var encoding = "默认"
-    @State private var bookType = "图文模式"
+    let book: Book
+    @State private var bookName: String
+    @State private var author: String
+    @State private var summary: String
+    @State private var selectedGroup: String
+    @State private var titleNumbering: String
+    @State private var encoding: String
+    @State private var bookType: String
     @State private var isParsing = false
     @State private var parseProgress = 0.0
     @State private var parsedChapters: [ParsedChapter] = []
@@ -18,10 +19,16 @@ struct EditBookView: View {
     @State private var showSuccess = false
     @State private var successMessage = ""
     
-    private let groups = ["顶层书架", "我的收藏", "正在阅读", "已读完"]
-    private let numberingOptions = ["与原文一致", "自动编号"]
-    private let encodingOptions = ["默认", "UTF-8", "GBK", "GB2312"]
-    private let bookTypes = ["图文模式", "纯文本模式", "漫画模式"]
+    init(book: Book) {
+        self.book = book
+        self._bookName = State(initialValue: book.name)
+        self._author = State(initialValue: book.author)
+        self._summary = State(initialValue: book.summary)
+        self._selectedGroup = State(initialValue: book.groupName)
+        self._titleNumbering = State(initialValue: book.titleNumbering ?? "与原文一致")
+        self._encoding = State(initialValue: book.encoding ?? "默认")
+        self._bookType = State(initialValue: book.bookType ?? "图文模式")
+    }
     
     var body: some View {
         NavigationStack {
@@ -88,7 +95,7 @@ struct EditBookView: View {
                         }
                         
                         Section(header: sectionHeader("")) {
-                            Text("总章节数:\(totalChapters > 0 ? totalChapters : 1080)")
+                            Text("总章节数:\(totalChapters > 0 ? totalChapters : book.chapters.count)")
                                 .font(.caption)
                                 .foregroundColor(.white.opacity(0.7))
                                 .padding(.horizontal, 16)
@@ -151,11 +158,17 @@ struct EditBookView: View {
                 .fill(Color(hex: "333333")!)
                 .frame(width: 80, height: 100)
             
-            Image("book_cover")
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 80, height: 100)
-                .cornerRadius(8)
+            if let coverData = book.coverData, let uiImage = UIImage(data: coverData) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 80, height: 100)
+                    .cornerRadius(8)
+            } else {
+                Image(systemName: "book")
+                    .foregroundColor(.white.opacity(0.5))
+                    .font(.title)
+            }
         }
     }
     
@@ -207,12 +220,16 @@ struct EditBookView: View {
         }
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            parsedChapters = [
-                ParsedChapter(id: "1", title: "扉页", level: "等级:1", status: .success),
-                ParsedChapter(id: "2", title: "制作信息", level: "等级:0", status: .success),
-                ParsedChapter(id: "3", title: "内容简介", level: "等级:0", status: .success),
-            ]
-            totalChapters = 1080
+            parsedChapters = book.chapters.enumerated().compactMap { index, chapter in
+                guard index < 3 else { return nil }
+                return ParsedChapter(
+                    id: chapter.id,
+                    title: chapter.title,
+                    level: "等级:\(chapter.level)",
+                    status: .success
+                )
+            }
+            totalChapters = book.chapters.count
             parseProgress = 1.0
             isParsing = false
         }
@@ -336,11 +353,5 @@ struct SuccessBanner: View {
         }
         .padding(.bottom, 50)
         .transition(.move(edge: .bottom).combined(with: .opacity))
-    }
-}
-
-struct EditBookView_Previews: PreviewProvider {
-    static var previews: some View {
-        EditBookView()
     }
 }

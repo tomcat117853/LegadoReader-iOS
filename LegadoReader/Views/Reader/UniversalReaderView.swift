@@ -200,14 +200,15 @@ struct UniversalReaderView: View {
             ReaderLayoutView()
         }
         .sheet(isPresented: $showingTableOfContents) {
-            TableOfContentsView(
-                bookName: currentBookTitle,
-                chapters: displayChapters,
-                currentChapterIndex: currentChapterIndex,
-                onSelectChapter: { index in
-                    selectChapter(at: index)
-                }
-            )
+            if case .networkBook(let book, _) = readerMode {
+                TableOfContentsView(
+                    book: book,
+                    currentChapterIndex: currentChapterIndex,
+                    onSelectChapter: { index in
+                        selectChapter(at: index)
+                    }
+                )
+            }
         }
         .sheet(isPresented: $showingStatistics) {
             if let lazyBook = readerMode.lazyBook {
