@@ -10,6 +10,8 @@ struct TableOfContentsView: View {
     
     @State private var expandedSections: Set<String> = []
     @State private var localCurrentIndex: Int
+    @State private var showSearch = false
+    @State private var searchText = ""
     
     init(bookName: String, chapters: [Chapter], currentChapterIndex: Int, onSelectChapter: @escaping (Int) -> Void) {
         self.bookName = bookName
@@ -21,7 +23,7 @@ struct TableOfContentsView: View {
     
     private var sections: [String] {
         var result: [String] = []
-        for chapter in chapters {
+        for chapter in filteredChapters {
             if let section = chapter.section, !result.contains(section) {
                 result.append(section)
             }
@@ -29,15 +31,26 @@ struct TableOfContentsView: View {
         return result
     }
     
-    private func chaptersInSection(_ section: String?) -> [Chapter] {
-        return chapters.enumerated().compactMap { index, chapter in
-            if section == nil && chapter.section == nil {
-                return (index, chapter)
-            } else if let section = section, chapter.section == section {
-                return (index, chapter)
+    private var filteredChapters: [Chapter] {
+        if searchText.isEmpty {
+            return chapters
+        }
+        return chapters.filter {
+            $0.title.lowercased().contains(searchText.lowercased())
+        }
+    }
+    
+    private func chaptersInSection(_ section: String?) -> [(index: Int, chapter: Chapter)] {
+        return chapters.enumerated().compactMap { idx, chapter in
+            if searchText.isEmpty || chapter.title.lowercased().contains(searchText.lowercased()) {
+                if section == nil && chapter.section == nil {
+                    return (idx, chapter)
+                } else if let section = section, chapter.section == section {
+                    return (idx, chapter)
+                }
             }
             return nil
-        }.map { ($0.offset, $0.element) }
+        }
     }
     
     var body: some View {
@@ -54,13 +67,26 @@ struct TableOfContentsView: View {
                         .foregroundColor(.white)
                 }
                 
-                Button(action: {}) {
+                Button(action: {
+                    withAnimation {
+                        showSearch.toggle()
+                    }
+                }) {
                     Image(systemName: "magnifyingglass")
                         .foregroundColor(.white)
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
+            
+            if showSearch {
+                TextField("搜索", text: $searchText)
+                    .textFieldStyle(.roundedBorder)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+                    .foregroundColor(.white)
+                    .accentColor(Color(hex: "8BC34A")!)
+            }
             
             Text("可用左滑手势对项进行操作")
                 .font(.caption)
@@ -70,46 +96,62 @@ struct TableOfContentsView: View {
             
             ScrollView {
                 VStack(spacing: 0) {
-                    let noSectionChapters = chaptersInSection(nil)
-                    ForEach(noSectionChapters, id: \.element.id) { index, chapter in
-                        chapterRow(chapter: chapter, index: index, isSectionChapter: false)
-                    }
-                    
-                    ForEach(sections, id: \.self) { section in
-                        VStack(spacing: 0) {
-                            Button(action: {
-                                withAnimation {
-                                    if expandedSections.contains(section) {
-                                        expandedSections.remove(section)
-                                    } else {
-                                        expandedSections.insert(section)
+                    if searchText.isEmpty {
+                        let noSectionChapters = chaptersInSection(nil)
+                        ForEach(noSectionChapters, id: \.chapter.id) { index, chapter in
+                            chapterRow(chapter: chapter, index: index, isSectionChapter: false)
+                        }
+                        
+                        ForEach(sections, id: \.self) { section in
+                            VStack(spacing: 0) {
+                                Button(action: {
+                                    withAnimation {
+                                        if expandedSections.contains(section) {
+                                            expandedSections.remove(section)
+                                        } else {
+                                            expandedSections.insert(section)
+                                        }
+                                    }
+                                }) {
+                                    HStack {
+                                        Image(systemName: expandedSections.contains(section) ? "chevron.down" : "chevron.right")
+                                            .foregroundColor(.white)
+                                            .font(.caption)
+                                        
+                                        Text(section)
+                                            .font(.subheadline)
+                                            .foregroundColor(.white)
+                                        
+                                        Spacer()
+                                        
+                                        let sectionChapters = chaptersInSection(section)
+                                        Text("\(sectionChapters.count)")
+                                            .font(.caption)
+                                            .foregroundColor(.white.opacity(0.7))
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 12)
+                                }
+                                
+                                if expandedSections.contains(section) {
+                                    let sectionChapters = chaptersInSection(section)
+                                    ForEach(sectionChapters, id: \.chapter.id) { index, chapter in
+                                        chapterRow(chapter: chapter, index: index, isSectionChapter: true)
                                     }
                                 }
-                            }) {
-                                HStack {
-                                    Image(systemName: expandedSections.contains(section) ? "chevron.down" : "chevron.right")
-                                        .foregroundColor(.white)
-                                        .font(.caption)
-                                    
-                                    Text(section)
-                                        .font(.subheadline)
-                                        .foregroundColor(.white)
-                                    
-                                    Spacer()
-                                    
-                                    let sectionChapters = chaptersInSection(section)
-                                    Text("\(sectionChapters.count)")
-                                        .font(.caption)
-                                        .foregroundColor(.white.opacity(0.7))
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
                             }
-                            
-                            if expandedSections.contains(section) {
-                                let sectionChapters = chaptersInSection(section)
-                                ForEach(sectionChapters, id: \.element.id) { index, chapter in
-                                    chapterRow(chapter: chapter, index: index, isSectionChapter: true)
+                        }
+                    } else {
+                        if filteredChapters.isEmpty {
+                            Text("未找到匹配的章节")
+                                .font(.subheadline)
+                                .foregroundColor(.white.opacity(0.7))
+                                .padding(.vertical, 24)
+                        } else {
+                            ForEach(filteredChapters.indices, id: \.self) { idx in
+                                let chapter = filteredChapters[idx]
+                                if let originalIndex = chapters.firstIndex(where: { $0.id == chapter.id }) {
+                                    chapterRow(chapter: chapter, index: originalIndex, isSectionChapter: false)
                                 }
                             }
                         }
@@ -214,6 +256,27 @@ struct TableOfContentsView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
         }
+        .swipeActions(edge: .trailing) {
+            Button("分级") {
+                print("分级 \(chapter.title)")
+            }
+            .tint(.purple)
+            
+            Button("改名") {
+                print("改名 \(chapter.title)")
+            }
+            .tint(.blue)
+            
+            Button("更多") {
+                print("更多 \(chapter.title)")
+            }
+            .tint(.orange)
+            
+            Button("删除") {
+                print("删除 \(chapter.title)")
+            }
+            .tint(.red)
+        }
     }
 }
 
@@ -230,11 +293,14 @@ struct TableOfContentsView_Previews: PreviewProvider {
             chapters: [
                 Chapter(id: "1", title: "扉页", url: "", content: "", section: nil, wordCount: 0),
                 Chapter(id: "2", title: "制作信息", url: "", content: "", section: nil, wordCount: 92),
-                Chapter(id: "3", title: "卷一", url: "", content: "", section: nil, wordCount: 2),
-                Chapter(id: "4", title: "第一章 洪公子", url: "", content: "", section: "卷一", wordCount: 2542),
-                Chapter(id: "5", title: "第二章 想再听弹奏", url: "", content: "", section: "卷一", wordCount: 2579),
+                Chapter(id: "3", title: "内容简介", url: "", content: "", section: nil, wordCount: 51),
+                Chapter(id: "4", title: "卷一", url: "", content: "", section: nil, wordCount: 2),
+                Chapter(id: "5", title: "第一章 洪公子", url: "", content: "", section: "卷一", wordCount: 2542),
+                Chapter(id: "6", title: "第二章 想再听弹奏", url: "", content: "", section: "卷一", wordCount: 2579),
+                Chapter(id: "7", title: "第三章 岂能算了", url: "", content: "", section: "卷一", wordCount: 1948),
+                Chapter(id: "8", title: "第四章 黄大人的烦恼", url: "", content: "", section: "卷一", wordCount: 2616),
             ],
-            currentChapterIndex: 3,
+            currentChapterIndex: 4,
             onSelectChapter: { index in
                 print("选择章节: \(index)")
             }
