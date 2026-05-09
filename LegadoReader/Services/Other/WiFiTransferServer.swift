@@ -11,12 +11,17 @@ class WiFiTransferServer: NSObject, ObservableObject {
     @Published var connectedDevices: [ConnectedDevice] = []
     @Published var transferHistory: [TransferRecord] = []
     @Published var currentTransfer: TransferInfo?
+    @Published var isPasswordEnabled: Bool = false
     
     private var listener: NWListener?
     private var connections: [NWConnection] = []
     private let fileManager = FileManager.default
     private let documentsDirectory: URL
     private let downloadDirectory: URL
+    private var serverPassword: String = ""
+    private var authenticatedConnections: Set<NWConnection> = []
+    
+    private let passwordKey = "WiFiTransfer_password"
     
     struct ConnectedDevice: Identifiable {
         let id: String
@@ -65,6 +70,44 @@ class WiFiTransferServer: NSObject, ObservableObject {
         if let data = try? JSONEncoder().encode(transferHistory) {
             UserDefaults.standard.set(data, forKey: "WiFiTransfer_history")
         }
+    }
+    
+    func loadPassword() {
+        if let password = KeychainHelper.load(for: passwordKey) {
+            serverPassword = password
+            isPasswordEnabled = !password.isEmpty
+        }
+    }
+    
+    func setPassword(_ password: String) {
+        serverPassword = password
+        try? KeychainHelper.save(password, for: passwordKey)
+        isPasswordEnabled = !password.isEmpty
+    }
+    
+    func clearPassword() {
+        serverPassword = ""
+        try? KeychainHelper.delete(for: passwordKey)
+        isPasswordEnabled = false
+    }
+    
+    func isAuthenticated(_ connection: NWConnection) -> Bool {
+        if !isPasswordEnabled {
+            return true
+        }
+        return authenticatedConnections.contains(connection)
+    }
+    
+    func authenticate(_ connection: NWConnection, password: String) -> Bool {
+        if password == serverPassword {
+            authenticatedConnections.insert(connection)
+            return true
+        }
+        return false
+    }
+    
+    func removeAuthenticatedConnection(_ connection: NWConnection) {
+        authenticatedConnections.remove(connection)
     }
     
     func startServer() {
@@ -542,6 +585,12 @@ class WiFiTransferServer: NSObject, ObservableObject {
                     handleFiles(fileInput.files);
                 });
                 
+                function escapeHTML(str) {
+                    const div = document.createElement('div');
+                    div.textContent = str;
+                    return div.innerHTML;
+                }
+                
                 async function handleFiles(files) {
                     fileList.innerHTML = '';
                     
@@ -558,9 +607,10 @@ class WiFiTransferServer: NSObject, ObservableObject {
                     
                     const item = document.createElement('div');
                     item.className = 'file-item';
+                    const safeName = escapeHTML(file.name);
                     item.innerHTML = \`
                         <div>
-                            <div class="file-name">\${file.name}</div>
+                            <div class="file-name">\${safeName}</div>
                             <div class="file-size">正在上传... 0%</div>
                         </div>
                         <span class="status" style="background: #fff3cd; color: #856404;">上传中</span>
@@ -577,27 +627,31 @@ class WiFiTransferServer: NSObject, ObservableObject {
                         const result = await response.json();
                         
                         if (result.success) {
+                            const safeFileName = escapeHTML(result.fileName);
+                            const safeSize = formatSize(result.fileSize);
                             item.innerHTML = \`
                                 <div>
-                                    <div class="file-name">\${result.fileName}</div>
-                                    <div class="file-size">\${formatSize(result.fileSize)}</div>
+                                    <div class="file-name">\${safeFileName}</div>
+                                    <div class="file-size">\${safeSize}</div>
                                 </div>
                                 <span class="status success">成功</span>
                             \`;
                         } else {
+                            const safeMsg = escapeHTML(result.message);
                             item.innerHTML = \`
                                 <div>
-                                    <div class="file-name">\${file.name}</div>
-                                    <div class="file-size">\${result.message}</div>
+                                    <div class="file-name">\${safeName}</div>
+                                    <div class="file-size">\${safeMsg}</div>
                                 </div>
                                 <span class="status" style="background: #f8d7da; color: #721c24;">失败</span>
                             \`;
                         }
                     } catch (error) {
+                        const safeError = escapeHTML(error.message);
                         item.innerHTML = \`
                             <div>
-                                <div class="file-name">\${file.name}</div>
-                                <div class="file-size">上传失败: \${error.message}</div>
+                                <div class="file-name">\${safeName}</div>
+                                <div class="file-size">上传失败: \${safeError}</div>
                             </div>
                             <span class="status" style="background: #f8d7da; color: #721c24;">失败</span>
                         \`;
@@ -621,10 +675,12 @@ class WiFiTransferServer: NSObject, ObservableObject {
                             files.forEach(file => {
                                 const item = document.createElement('div');
                                 item.className = 'file-item';
+                                const safeName = escapeHTML(file.name);
+                                const safeSize = formatSize(file.size);
                                 item.innerHTML = \`
                                     <div>
-                                        <div class="file-name">\${file.name}</div>
-                                        <div class="file-size">\${formatSize(file.size)}</div>
+                                        <div class="file-name">\${safeName}</div>
+                                        <div class="file-size">\${safeSize}</div>
                                     </div>
                                     <span class="status success">已接收</span>
                                 \`;

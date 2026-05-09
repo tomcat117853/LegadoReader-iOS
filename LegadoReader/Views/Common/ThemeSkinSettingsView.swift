@@ -478,13 +478,3 @@ struct LanguageSettingsView: View {
         .navigationTitle("语言设置")
     }
 }
-
-extension Color {
-    func toHex() -> String? {
-        guard let components = UIColor(self).cgColor.components else { return nil }
-        let r = Float(components[0])
-        let g = Float(components.count >= 3 ? components[1] : components[0])
-        let b = Float(components.count >= 3 ? components[2] : components[0])
-        return String(format: "#%02lX%02lX%02lX", lroundf(r * 255), lroundf(g * 255), lroundf(b * 255))
-    }
-}

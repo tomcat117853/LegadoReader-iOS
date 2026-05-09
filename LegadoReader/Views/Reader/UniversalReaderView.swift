@@ -43,6 +43,7 @@ struct UniversalReaderView: View {
     @State private var showingSourceSelector = false
     @State private var showingSettingsMenu = false
     @State private var showingLayoutView = false
+    @State private var showingTableOfContents = false
     
     private var isLazyBookMode: Bool {
         if case .lazyBook = readerMode { return true }
@@ -96,6 +97,13 @@ struct UniversalReaderView: View {
         return readerSettings.currentTextColor
     }
     
+    private var displayChapters: [Chapter] {
+        if isLazyBookMode {
+            return readerMode.lazyBook?.chapters ?? []
+        }
+        return chapters
+    }
+    
     var body: some View {
         ZStack {
             backgroundColor
@@ -123,7 +131,7 @@ struct UniversalReaderView: View {
                         bookName: currentBookTitle,
                         chapterTitle: currentChapterTitle,
                         onBack: { dismiss() },
-                        onShowChapters: { showingChapterList = true },
+                        onShowChapters: { showingTableOfContents = true },
                         onShowSettings: { showingSettings = true },
                         onSelectSource: { showingSourceSelector = true }
                     )
@@ -140,7 +148,7 @@ struct UniversalReaderView: View {
                             onNext: loadNextChapter,
                             onAudioBook: { showingAudioBook = true },
                             onAutoScroll: { showingAutoScroll = true },
-                            onShowChapters: { showingChapterList = true },
+                            onShowChapters: { showingTableOfContents = true },
                             onLayout: { showingLayoutView = true },
                             onCache: {},
                             onPageTurn: {},
@@ -157,7 +165,7 @@ struct UniversalReaderView: View {
                             onNext: loadNextChapter,
                             onAudioBook: { showingAudioBook = true },
                             onAutoScroll: { showingAutoScroll = true },
-                            onShowChapters: { showingChapterList = true },
+                            onShowChapters: { showingTableOfContents = true },
                             onLayout: { showingLayoutView = true },
                             onCache: {},
                             onPageTurn: {},
@@ -190,6 +198,17 @@ struct UniversalReaderView: View {
         }
         .sheet(isPresented: $showingLayoutView) {
             ReaderLayoutView()
+        }
+        .sheet(isPresented: $showingTableOfContents) {
+            if case .networkBook(let book, _) = readerMode {
+                TableOfContentsView(
+                    book: book,
+                    currentChapterIndex: currentChapterIndex,
+                    onSelectChapter: { index in
+                        selectChapter(at: index)
+                    }
+                )
+            }
         }
         .sheet(isPresented: $showingStatistics) {
             if let lazyBook = readerMode.lazyBook {
@@ -364,6 +383,18 @@ struct UniversalReaderView: View {
         currentChapterIndex = chapters.firstIndex(where: { $0.id == chapter.id }) ?? 0
         Task {
             chapterContent = await loadChapterContent(chapter)
+        }
+    }
+    
+    private func selectChapter(at index: Int) {
+        if isLazyBookMode {
+            Task {
+                await loadLazyChapter(index)
+            }
+        } else {
+            if index < chapters.count {
+                loadChapter(chapters[index])
+            }
         }
     }
     

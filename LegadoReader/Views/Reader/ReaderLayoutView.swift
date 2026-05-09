@@ -5,53 +5,64 @@ struct ReaderLayoutView: View {
     
     @State private var selectedLayout = "自定义"
     @State private var selectedColorIndex = 0
-    @State private var fontSize: Double = 18
+    @State private var brightness: Double = 0.5
     @State private var showLayoutManager = false
     @State private var showColorManager = false
+    @State private var showColorTemplate = false
     
     private let layoutTypes = ["自定义", "初号", "小初", "一号", "一号宽", "小一", "二号", "小二", "三号", "小三"]
     
     private let colorSchemes = [
-        Color(hex: "E8F5E9")!, // 护眼绿
-        Color(hex: "F5F5F5")!, // 白色
-        Color(hex: "F5E6D3")!, // 护眼黄
-        Color(hex: "1B1B1B")!, // 黑色
-        Color(hex: "2D2D2D")!, // 深灰
+        ("护眼绿", Color(hex: "E8F5E9")!),
+        ("白色", Color(hex: "FFFFFF")!),
+        ("护眼黄", Color(hex: "F5E6D3")!),
+        ("黑色", Color(hex: "1B1B1B")!),
+        ("深灰", Color(hex: "2D2D2D")!),
     ]
     
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
-                HStack(spacing: 8) {
-                    ForEach(layoutTypes, id: \.self) { layout in
-                        Button(action: { selectedLayout = layout }) {
-                            Text(layout)
-                                .font(.subheadline)
-                                .foregroundColor(selectedLayout == layout ? .white : .primary)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .background(selectedLayout == layout ? Color.red : Color(.systemGray5))
-                                .cornerRadius(8)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(layoutTypes, id: \.self) { layout in
+                            Button(action: {
+                                if layout == "自定义" {
+                                    showLayoutManager = true
+                                } else {
+                                    selectedLayout = layout
+                                }
+                            }) {
+                                Text(layout)
+                                    .font(.subheadline)
+                                    .foregroundColor(selectedLayout == layout ? .white : .primary)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 10)
+                                    .background(selectedLayout == layout ? Color(hex: "1B5E20")! : Color(.systemGray5))
+                                    .cornerRadius(8)
+                            }
                         }
                     }
+                    .padding(.horizontal)
                 }
-                .padding(.horizontal)
                 
-                HStack(spacing: 8) {
+                HStack(spacing: 12) {
                     ForEach(colorSchemes.indices, id: \.self) { index in
-                        Button(action: { selectedColorIndex = index }) {
+                        Button(action: {
+                            selectedColorIndex = index
+                        }) {
                             ZStack(alignment: .topTrailing) {
-                                colorSchemes[index]
-                                    .frame(width: 60, height: 80)
+                                colorSchemes[index].1
+                                    .frame(width: 56, height: 72)
                                     .cornerRadius(8)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 8)
-                                            .stroke(selectedColorIndex == index ? Color.green : Color.clear, lineWidth: 2)
+                                            .stroke(selectedColorIndex == index ? Color(hex: "1B5E20")! : Color.clear, lineWidth: 2)
                                     )
                                 
-                                Image(systemName: "pencil")
+                                Image(systemName: "checkmark")
                                     .font(.caption)
-                                    .foregroundColor(selectedColorIndex == index ? .green : .white.opacity(0.7))
+                                    .foregroundColor(selectedColorIndex == index ? Color(hex: "1B5E20")! : .white.opacity(0.7))
                                     .padding(2)
                             }
                         }
@@ -68,7 +79,7 @@ struct ReaderLayoutView: View {
                                 .padding(.horizontal, 24)
                                 .padding(.vertical, 12)
                                 .background(Color(hex: "1B5E20")!)
-                                .cornerRadius(20)
+                                .cornerRadius(20, corners: [.topLeft, .bottomLeft])
                         }
                         
                         Button(action: {}) {
@@ -78,53 +89,53 @@ struct ReaderLayoutView: View {
                                 .padding(.horizontal, 24)
                                 .padding(.vertical, 12)
                                 .background(Color(hex: "1B5E20")!)
-                                .cornerRadius(20)
+                                .cornerRadius(20, corners: [.topRight, .bottomRight])
                         }
                     }
                     
                     HStack(spacing: 0) {
-                        Button(action: { showColorManager = true }) {
+                        Button(action: { showColorTemplate = true }) {
                             Text("配色")
                                 .font(.subheadline)
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 24)
                                 .padding(.vertical, 12)
                                 .background(Color(hex: "1B5E20")!)
-                                .cornerRadius(20)
+                                .cornerRadius(20, corners: [.topLeft, .bottomLeft])
                         }
                         
-                        Button(action: { showLayoutManager = true }) {
+                        Button(action: { showColorManager = true }) {
                             Text("管理")
                                 .font(.subheadline)
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 24)
                                 .padding(.vertical, 12)
                                 .background(Color(hex: "1B5E20")!)
-                                .cornerRadius(20)
+                                .cornerRadius(20, corners: [.topRight, .bottomRight])
                         }
                     }
                 }
+                .padding(.horizontal)
                 
                 HStack {
                     Image(systemName: "sun.max")
                         .foregroundColor(.white)
                     
-                    Slider(value: $fontSize, in: 12...32)
-                        .accentColor(Color.green)
+                    Slider(value: $brightness, in: 0...1)
+                        .accentColor(Color(hex: "1B5E20")!)
                     
                     Image(systemName: "sun.max.fill")
                         .foregroundColor(.white)
                     
                     Text("随系统")
                         .font(.caption)
-                        .foregroundColor(.green)
+                        .foregroundColor(Color(hex: "1B5E20")!)
                 }
                 .padding(.horizontal)
                 .padding(.vertical, 8)
-                .background(Color(hex: "1B5E20")!)
+                .background(Color(.systemGray5))
                 .cornerRadius(20)
             }
-            .background(Color(hex: "1B5E20")!)
             .navigationTitle("阅读布局")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -141,7 +152,114 @@ struct ReaderLayoutView: View {
             .sheet(isPresented: $showColorManager) {
                 ColorSchemeManagerView()
             }
+            .sheet(isPresented: $showColorTemplate) {
+                ColorTemplateView()
+            }
         }
+    }
+}
+
+struct ColorTemplateView: View {
+    @Environment(\.dismiss) var dismiss
+    
+    @State private var templateName = ""
+    @State private var textColor = Color(hex: "333333")!
+    @State private var widgetColor = Color(hex: "666666")!
+    @State private var bgColor = Color(hex: "E8F5E9")!
+    @State private var appTextColor = Color(hex: "B0B0B0")!
+    @State private var appBgColor = Color(hex: "1B1B1B")!
+    @State private var highlightColor = Color(hex: "1B5E20")!
+    @State private var accentColor1 = Color(hex: "1B5E20")!
+    @State private var accentColor2 = Color(hex: "1B5E20")!
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                Text("创建阅读界面配色模板")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .padding(.top, 20)
+                    .padding(.bottom, 16)
+                
+                VStack(spacing: 0) {
+                    HStack {
+                        Text("名称")
+                            .font(.subheadline)
+                            .foregroundColor(.white)
+                            .padding(.vertical, 12)
+                        
+                        Spacer()
+                        
+                        Button(action: {}) {
+                            Text("颜色")
+                                .font(.subheadline)
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .background(Color(hex: "1B5E20")!)
+                    .cornerRadius(8, corners: [.topLeft, .topRight])
+                    
+                    ColorRow(title: "阅读字体颜色", subtitle: "阅读内容的字体颜色", color: $textColor)
+                    ColorRow(title: "阅读小部件颜色", subtitle: "小部件字体颜色", color: $widgetColor)
+                    ColorRow(title: "阅读背景颜色", subtitle: "阅读内容的背景颜色", color: $bgColor)
+                    ColorRow(title: "App阅读界面字体颜色", subtitle: "阅读界面上字体的颜色", color: $appTextColor)
+                    ColorRow(title: "App阅读界面背景颜色", subtitle: "阅读界面上的背景颜色", color: $appBgColor)
+                    ColorRow(title: "App阅读界面高亮色", subtitle: "阅读界面上选中或高亮的颜色", color: $highlightColor)
+                    ColorRow(title: "阅读附加颜色1", subtitle: "可用于标记或排版强化", color: $accentColor1)
+                    ColorRow(title: "阅读附加颜色2", subtitle: "可用于标记或排版强化", color: $accentColor2)
+                        .background(Color(hex: "1B5E20")!)
+                        .cornerRadius(8, corners: [.bottomLeft, .bottomRight])
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
+                
+                Button(action: { dismiss() }) {
+                    Text("取消")
+                        .font(.subheadline)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 48)
+                        .padding(.vertical, 12)
+                        .background(Color(hex: "1B5E20")!)
+                        .cornerRadius(20)
+                }
+            }
+            .background(Color(hex: "1B5E20")!.opacity(0.95))
+            .presentationDetents([.medium])
+        }
+    }
+}
+
+struct ColorRow: View {
+    let title: String
+    let subtitle: String
+    @Binding var color: Color
+    
+    var body: some View {
+        HStack {
+            color
+                .frame(width: 48, height: 48)
+                .cornerRadius(6)
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.3), lineWidth: 1))
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline)
+                    .foregroundColor(.white)
+                
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.7))
+            }
+            
+            Spacer()
+            
+            Image(systemName: "chevron.right")
+                .foregroundColor(.white.opacity(0.5))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color(hex: "1B5E20")!.opacity(0.5))
     }
 }
 
@@ -176,7 +294,7 @@ struct LayoutManagerView: View {
                                     }
                                 }) {
                                     Image(systemName: selectedLayouts.contains(layout) ? "checkmark.circle.fill" : "circle")
-                                        .foregroundColor(selectedLayouts.contains(layout) ? .red : .secondary)
+                                        .foregroundColor(selectedLayouts.contains(layout) ? Color(hex: "1B5E20")! : .secondary)
                                 }
                             }
                             
@@ -265,32 +383,6 @@ struct LayoutManagerView: View {
     }
 }
 
-extension Color {
-    init?(hex: String) {
-        let hexString = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0
-        Scanner(string: hexString).scanHexInt64(&int)
-        let a, r, g, b: UInt64
-        switch hexString.count {
-        case 3: // RGB (12-bit)
-            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
-        case 6: // RGB (24-bit)
-            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
-        case 8: // ARGB (32-bit)
-            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
-        default:
-            return nil
-        }
-        self.init(
-            .sRGB,
-            red: Double(r) / 255,
-            green: Double(g) / 255,
-            blue: Double(b) / 255,
-            opacity: Double(a) / 255
-        )
-    }
-}
-
 struct ColorSchemeManagerView: View {
     @Environment(\.dismiss) var dismiss
     
@@ -305,7 +397,7 @@ struct ColorSchemeManagerView: View {
         ("流光溢彩", "来自 App 颜色主题", Color(hex: "1a1a2e")!, Color(hex: "eaeaea")!),
         ("阅-浅绿", "仅用于阅读界面", Color(hex: "E8F5E9")!, Color(hex: "1B5E20")!),
         ("阅-青绿", "仅用于阅读界面", Color(hex: "E0F7FA")!, Color(hex: "00838F")!),
-        ("阅-土棕", "仅用于阅读界面", Color(hex: "F5E6D3")!, Color(hex: "5D4037")!),
+        ("阅-土棕", "仅用于阅读界面", Color(hex: "F5F5F5")!, Color(hex: "5D4037")!),
         ("阅-白灰", "仅用于阅读界面", Color(hex: "F5F5F5")!, Color(hex: "424242")!),
         ("阅-灰白", "仅用于阅读界面", Color(hex: "E0E0E0")!, Color(hex: "303030")!),
     ]
@@ -323,7 +415,7 @@ struct ColorSchemeManagerView: View {
                 
                 List {
                     ForEach(colorSchemes, id: \.0) { scheme in
-                        HStack {
+                        HStack(spacing: 12) {
                             if isEditing {
                                 Button(action: {
                                     if selectedSchemes.contains(scheme.0) {
@@ -333,24 +425,11 @@ struct ColorSchemeManagerView: View {
                                     }
                                 }) {
                                     Image(systemName: selectedSchemes.contains(scheme.0) ? "checkmark.circle.fill" : "circle")
-                                        .foregroundColor(selectedSchemes.contains(scheme.0) ? .red : .secondary)
+                                        .foregroundColor(selectedSchemes.contains(scheme.0) ? Color(hex: "1B5E20")! : .secondary)
                                 }
                             }
                             
-                            ZStack(alignment: .topTrailing) {
-                                scheme.2
-                                    .frame(width: 50, height: 60)
-                                    .cornerRadius(6)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
-                                    )
-                                
-                                Image(systemName: "pencil")
-                                    .font(.caption)
-                                    .foregroundColor(scheme.3)
-                                    .padding(2)
-                            }
+                            ColorPreviewView(bgColor: scheme.2, textColor: scheme.3)
                             
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(scheme.0)
@@ -436,6 +515,67 @@ struct ColorSchemeManagerView: View {
                 }
             }
         }
+    }
+}
+
+struct ColorPreviewView: View {
+    let bgColor: Color
+    let textColor: Color
+    
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            bgColor
+                .frame(width: 50, height: 60)
+                .cornerRadius(6)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                )
+            
+            VStack(spacing: 3) {
+                Rectangle()
+                    .fill(textColor)
+                    .frame(height: 4)
+                    .padding(.horizontal, 4)
+                
+                Rectangle()
+                    .fill(textColor)
+                    .frame(height: 3)
+                    .padding(.horizontal, 4)
+                
+                Rectangle()
+                    .fill(textColor)
+                    .frame(height: 3)
+                    .padding(.horizontal, 4)
+                
+                Rectangle()
+                    .fill(textColor)
+                    .frame(height: 3)
+                    .padding(.horizontal, 4)
+            }
+            .padding(.top, 8)
+            
+            Image(systemName: "pencil")
+                .font(.caption)
+                .foregroundColor(textColor)
+                .padding(2)
+        }
+    }
+}
+
+extension View {
+    func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
+        clipShape(RoundedCorner(radius: radius, corners: corners))
+    }
+}
+
+struct RoundedCorner: Shape {
+    var radius: CGFloat = .infinity
+    var corners: UIRectCorner = .allCorners
+    
+    func path(in rect: CGRect) -> Path {
+        let path = UIBezierPath(roundedRect: rect, byRoundingCorners: corners, cornerRadii: CGSize(width: radius, height: radius))
+        return Path(path.cgPath)
     }
 }
 

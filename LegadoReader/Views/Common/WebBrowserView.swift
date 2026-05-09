@@ -347,6 +347,21 @@ struct BrowserWebView: UIViewRepresentable {
         }
         
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            guard let url = navigationAction.request.url else {
+                decisionHandler(.cancel)
+                return
+            }
+            
+            if url.scheme == "file" {
+                decisionHandler(.cancel)
+                return
+            }
+            
+            if url.scheme != "http" && url.scheme != "https" {
+                decisionHandler(.cancel)
+                return
+            }
+            
             decisionHandler(.allow)
         }
     }

@@ -5,6 +5,7 @@ struct Book: Identifiable, Codable, Equatable {
     var name: String
     var author: String
     var cover: String?
+    var coverData: Data?
     var intro: String?
     var kind: String?
     var lastChapter: String?
@@ -18,11 +19,21 @@ struct Book: Identifiable, Codable, Equatable {
     var lastReadTime: Date?
     var addedTime: Date
     var updatedTime: Date?
+    var groupName: String
+    var titleNumbering: String?
+    var encoding: String?
+    var bookType: String?
+    var chapters: [Chapter]
+    
+    var summary: String {
+        intro ?? ""
+    }
     
     init(id: String = UUID().uuidString,
          name: String,
          author: String,
          cover: String? = nil,
+         coverData: Data? = nil,
          intro: String? = nil,
          lastChapter: String? = nil,
          sourceUrl: String,
@@ -32,6 +43,7 @@ struct Book: Identifiable, Codable, Equatable {
         self.name = name
         self.author = author
         self.cover = cover
+        self.coverData = coverData
         self.intro = intro
         self.lastChapter = lastChapter
         self.lastReadChapter = nil
@@ -44,6 +56,11 @@ struct Book: Identifiable, Codable, Equatable {
         self.lastReadTime = nil
         self.addedTime = Date()
         self.updatedTime = nil
+        self.groupName = "顶层书架"
+        self.titleNumbering = nil
+        self.encoding = nil
+        self.bookType = nil
+        self.chapters = []
     }
 }
 
@@ -54,18 +71,27 @@ struct Chapter: Identifiable, Codable, Equatable {
     var index: Int
     var content: String?
     var isLoaded: Bool
+    var section: String?
+    var level: Int
+    var wordCount: Int
     
     init(id: String = UUID().uuidString,
          title: String,
          url: String,
          index: Int,
-         content: String? = nil) {
+         content: String? = nil,
+         section: String? = nil,
+         level: Int = 0,
+         wordCount: Int = 0) {
         self.id = id
         self.title = title
         self.url = url
         self.index = index
         self.content = content
         self.isLoaded = content != nil
+        self.section = section
+        self.level = level
+        self.wordCount = wordCount
     }
 }
 
