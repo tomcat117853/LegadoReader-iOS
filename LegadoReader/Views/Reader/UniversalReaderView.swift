@@ -43,6 +43,7 @@ struct UniversalReaderView: View {
     @State private var showingSourceSelector = false
     @State private var showingSettingsMenu = false
     @State private var showingLayoutView = false
+    @State private var showingTableOfContents = false
     
     private var isLazyBookMode: Bool {
         if case .lazyBook = readerMode { return true }
@@ -123,7 +124,7 @@ struct UniversalReaderView: View {
                         bookName: currentBookTitle,
                         chapterTitle: currentChapterTitle,
                         onBack: { dismiss() },
-                        onShowChapters: { showingChapterList = true },
+                        onShowChapters: { showingTableOfContents = true },
                         onShowSettings: { showingSettings = true },
                         onSelectSource: { showingSourceSelector = true }
                     )
@@ -140,7 +141,7 @@ struct UniversalReaderView: View {
                             onNext: loadNextChapter,
                             onAudioBook: { showingAudioBook = true },
                             onAutoScroll: { showingAutoScroll = true },
-                            onShowChapters: { showingChapterList = true },
+                            onShowChapters: { showingTableOfContents = true },
                             onLayout: { showingLayoutView = true },
                             onCache: {},
                             onPageTurn: {},
@@ -157,7 +158,7 @@ struct UniversalReaderView: View {
                             onNext: loadNextChapter,
                             onAudioBook: { showingAudioBook = true },
                             onAutoScroll: { showingAutoScroll = true },
-                            onShowChapters: { showingChapterList = true },
+                            onShowChapters: { showingTableOfContents = true },
                             onLayout: { showingLayoutView = true },
                             onCache: {},
                             onPageTurn: {},
@@ -190,6 +191,9 @@ struct UniversalReaderView: View {
         }
         .sheet(isPresented: $showingLayoutView) {
             ReaderLayoutView()
+        }
+        .sheet(isPresented: $showingTableOfContents) {
+            TableOfContentsView()
         }
         .sheet(isPresented: $showingStatistics) {
             if let lazyBook = readerMode.lazyBook {
