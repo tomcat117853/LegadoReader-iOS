@@ -14,6 +14,7 @@ struct TableOfContentsView: View {
     @State private var showSearch = false
     @State private var searchText = ""
     @State private var showRefreshAlert = false
+    @State private var showEditBook = false
     
     init(bookName: String, chapters: [Chapter], currentChapterIndex: Int, onSelectChapter: @escaping (Int) -> Void, onRefresh: (() -> Void)? = nil) {
         self.bookName = bookName
@@ -236,10 +237,13 @@ struct TableOfContentsView: View {
                 title: Text("提示"),
                 message: Text("重新从原文件中加载所有数据，将覆盖当前所有被修改过的内容"),
                 primaryButton: .destructive(Text("重新解析")) {
-                    onRefresh?()
+                    showEditBook = true
                 },
                 secondaryButton: .cancel(Text("取消"))
             )
+        }
+        .fullScreenCover(isPresented: $showEditBook) {
+            EditBookView()
         }
     }
     
