@@ -97,6 +97,13 @@ struct UniversalReaderView: View {
         return readerSettings.currentTextColor
     }
     
+    private var displayChapters: [Chapter] {
+        if isLazyBookMode {
+            return readerMode.lazyBook?.chapters ?? []
+        }
+        return chapters
+    }
+    
     var body: some View {
         ZStack {
             backgroundColor
@@ -193,7 +200,14 @@ struct UniversalReaderView: View {
             ReaderLayoutView()
         }
         .sheet(isPresented: $showingTableOfContents) {
-            TableOfContentsView()
+            TableOfContentsView(
+                bookName: currentBookTitle,
+                chapters: displayChapters,
+                currentChapterIndex: currentChapterIndex,
+                onSelectChapter: { index in
+                    selectChapter(at: index)
+                }
+            )
         }
         .sheet(isPresented: $showingStatistics) {
             if let lazyBook = readerMode.lazyBook {
@@ -368,6 +382,18 @@ struct UniversalReaderView: View {
         currentChapterIndex = chapters.firstIndex(where: { $0.id == chapter.id }) ?? 0
         Task {
             chapterContent = await loadChapterContent(chapter)
+        }
+    }
+    
+    private func selectChapter(at index: Int) {
+        if isLazyBookMode {
+            Task {
+                await loadLazyChapter(index)
+            }
+        } else {
+            if index < chapters.count {
+                loadChapter(chapters[index])
+            }
         }
     }
     
